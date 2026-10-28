@@ -21,7 +21,7 @@ jobs:
       - run: ruff check backend
       - run: alembic upgrade head
         env: {DATABASE_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/campus_test"}
-      - run: pytest --junitxml=artifacts/backend-tests.xml
+      - run: python -m pytest --junitxml=artifacts/backend-tests.xml
         env: {TEST_POSTGRES_URL: "postgresql+psycopg://postgres:postgres@localhost:5432/campus_test"}
       - uses: actions/upload-artifact@v4
         if: always()

@@ -1,5 +1,6 @@
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
+pythonpath = ["."]
 addopts = "-q"
 markers = ["postgres: requires a PostgreSQL pgvector database"]
 
