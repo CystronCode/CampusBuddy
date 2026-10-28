@@ -1,0 +1,9 @@
+.git
+.venv
+**/node_modules
+**/.next
+**/.env*
+data
+artifacts
+**/__pycache__
+**/test-results

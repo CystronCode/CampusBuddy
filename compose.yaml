@@ -1,0 +1,42 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: campusos
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-development-only
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d campusos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  migrate:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:local-development-only@postgres:5432/campusos
+      LOCAL_COMPOSE: "1"
+    depends_on: {postgres: {condition: service_healthy}}
+    command: ["sh", "-c", "alembic upgrade head && python -m backend.scripts.provision_local_db"]
+  api:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://campus_local:campus-local-only@postgres:5432/campusos
+      APP_ENV: development
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: ["source-data:/app/data"]
+  worker:
+    build: {context: ., dockerfile: backend/Dockerfile}
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:local-development-only@postgres:5432/campusos
+      APP_ENV: development
+    command: ["python", "-m", "backend.app.worker"]
+    depends_on: {migrate: {condition: service_completed_successfully}}
+    volumes: ["source-data:/app/data"]
+volumes:
+  postgres-data:
+  source-data:
