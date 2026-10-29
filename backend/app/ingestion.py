@@ -601,10 +601,7 @@ def work_once(session_factory, store=None):
             db.rollback()
             job = db.get(IngestionJob, job_id)
             job.status = "failed"
-            job.error = (
-                str(exc.detail if isinstance(exc, HTTPException) else exc)[:400]
-                if isinstance(exc, (ValueError, HTTPException))
-                else "Import failed safely. Check file contents and worker configuration, then retry."
-            )
+            err_msg = str(getattr(exc, "detail", exc))[:400]
+            job.error = err_msg if err_msg else "Import failed safely. Check file contents and worker configuration, then retry."
             db.commit()
     return True
