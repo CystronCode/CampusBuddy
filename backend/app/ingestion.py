@@ -309,6 +309,10 @@ class Ingestion:
                 )
             )
             if job:
+                if job.status == "failed":
+                    job.status = "received"
+                    job.error = None
+                    self.preview(job)
                 return job
         sid = uid()
         key = f"{a.tenant_id}/{sid}/{checksum}"
