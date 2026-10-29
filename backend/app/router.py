@@ -46,6 +46,9 @@ class Router:
         started = perf_counter()
         context = dict(context or {})
         q = question.lower().replace("’", "'")
+        search_query = question
+        if re.search(r"final exam|end exam|see exam|finals", q):
+            search_query = question + " semester end examination practicals theory SEE final"
         today = c.clock().date()
         on = parse_date(q, today)
         at = parse_time(q)
@@ -178,7 +181,7 @@ class Router:
                     " Conflicting examination circulars exist. Confirm the date with the examination office."
                 )
         elif re.search(
-            r"notice|circular|policy|policies|document|assessment|library|scholarship|announcement", q
+            r"notice|circular|policy|policies|document|assessment|library|scholarship|announcement|calendar|academic|semester|exam|quiz", q
         ):
             route = "Semantic document retrieval"
             if re.search(r"announcement|latest notices|today.s notices", q) and not re.search(
@@ -191,7 +194,7 @@ class Router:
                 kind = "passages"
                 result = tools.call(
                     "search_documents",
-                    query=question,
+                    query=search_query,
                     include_outdated=bool(re.search(r"archiv|outdated|previous", q)),
                 )
                 rows = result["hits"]
