@@ -178,6 +178,12 @@ def validate_records(frame, kind, mapping, service, department):
     schema = DOMAIN_SCHEMAS[kind]
     errors = []
     rows = []
+    valid_faculty_codes = None
+    if kind == "timetable":
+        try:
+            valid_faculty_codes = {f["code"] for f in service.records("faculty")}
+        except Exception:
+            valid_faculty_codes = None
     for index, raw in frame.iterrows():
         try:
             data = {
@@ -213,7 +219,7 @@ def validate_records(frame, kind, mapping, service, department):
             row = schema.model_validate(data).model_dump(mode="json")
             if kind not in ("emails",):
                 service.actor.check_department_write(row.get("department", department))
-            if kind == "timetable" and not service.faculty(code=row["faculty_code"]):
+            if kind == "timetable" and valid_faculty_codes is not None and row["faculty_code"] not in valid_faculty_codes:
                 raise ValueError("Faculty code was not found. Import faculty first, then map faculty_code.")
             rows.append(row)
         except (ValidationError, ValueError) as exc:
@@ -509,16 +515,21 @@ class Ingestion:
                 )
             if errors:
                 raise ValueError("Source validation changed. Preview and validate again.")
-            for row in rows:
-                owner = c.actor.user_id if options.kind == "emails" else None
-                key = natural_key(options.kind, row, owner)
-                record = c.db.scalar(
+            owner = c.actor.user_id if options.kind == "emails" else None
+            keys = [natural_key(options.kind, r, owner) for r in rows]
+            existing_records = {
+                r.natural_key: r
+                for r in c.db.scalars(
                     select(CampusRecord).where(
                         CampusRecord.tenant_id == c.actor.tenant_id,
                         CampusRecord.kind == options.kind,
-                        CampusRecord.natural_key == key,
+                        CampusRecord.natural_key.in_(keys),
                     )
-                )
+                ).all()
+            }
+            for row in rows:
+                key = natural_key(options.kind, row, owner)
+                record = existing_records.get(key)
                 if record:
                     if record.owner_id != owner:
                         raise ValueError("The record owner does not match this import.")
