@@ -181,7 +181,7 @@ class Router:
                     " Conflicting examination circulars exist. Confirm the date with the examination office."
                 )
         elif re.search(
-            r"notice|circular|policy|policies|document|assessment|library|scholarship|announcement|calendar|academic|semester|exam|quiz", q
+            r"notice|circular|policy|policies|document|assessment|library|scholarship|announcement|calendar|academic|semester|exam|quiz|syllabus|curriculum|course|subject|module|unit|grading|rule|regulation|guideline|handbook|manual|book|fee|hostel|admission|eligibility|scheme", q
         ):
             route = "Semantic document retrieval"
             if re.search(r"announcement|latest notices|today.s notices", q) and not re.search(
@@ -260,7 +260,18 @@ class Router:
             if kind == "classes" and rows:
                 context.update(faculty_code=rows[0]["faculty_code"], date=rows[0]["date"], domain="timetable")
         else:
-            answer = "I can find campus classes, food, faculty, notices, events and your authorized emails. Try a subject name or “My next class”. I do not have supporting information for that request."
+            doc_res = tools.call("search_documents", query=search_query)
+            if doc_res.get("hits") and not doc_res.get("missing"):
+                route = "Semantic document retrieval"
+                kind = "passages"
+                rows = doc_res["hits"]
+                answer = doc_res["answer"]
+                if not doc_res.get("conflicts"):
+                    synthesis = self.provider.synthesize(question, rows)
+                    if synthesis and synthesis.answer:
+                        answer = synthesis.answer
+            else:
+                answer = "I can find campus classes, food, faculty, notices, events and your authorized emails. Try a subject name or “My next class”. I do not have supporting information for that request."
         if rows and kind not in ("text", "passages") and not ("conflict" in answer.lower() or "Which professor" in answer):
             synthesis = self.provider.synthesize(question, rows)
             if synthesis and synthesis.answer:
