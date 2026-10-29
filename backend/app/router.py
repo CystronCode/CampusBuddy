@@ -261,6 +261,10 @@ class Router:
                 context.update(faculty_code=rows[0]["faculty_code"], date=rows[0]["date"], domain="timetable")
         else:
             answer = "I can find campus classes, food, faculty, notices, events and your authorized emails. Try a subject name or “My next class”. I do not have supporting information for that request."
+        if rows and kind not in ("text", "passages") and not ("conflict" in answer.lower() or "Which professor" in answer):
+            synthesis = self.provider.synthesize(question, rows)
+            if synthesis and synthesis.answer:
+                answer = synthesis.answer
         if not rows and kind != "text" and not ("could not find" in answer or "Which professor" in answer):
             answer += " No matching records were found. Try a different date, broader filters, or ask an administrator to import the source."
         source_ids = set(extra_sources)

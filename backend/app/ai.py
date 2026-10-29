@@ -22,9 +22,21 @@ class GeminiProvider:
         config = settings()
         if not config.gemini_api_key:
             return None
-        sources = [
-            dict(source_id=h["source_id"], text=h["text"][:1800]) for h in hits if not h.get("suspicious")
-        ]
+        sources = []
+        for h in hits:
+            if isinstance(h, dict):
+                if h.get("suspicious"):
+                    continue
+                sid = str(h.get("source_id") or "campus-data")
+                txt = h.get("text")
+                if not txt:
+                    txt = ", ".join(
+                        f"{k}: {v}"
+                        for k, v in h.items()
+                        if k not in ("id", "tenant_id", "owner_id", "source_id", "source_ids", "demo", "suspicious") and v is not None and v != ""
+                    )
+                if txt:
+                    sources.append(dict(source_id=sid, text=str(txt)[:1800]))
         if not sources:
             return None
         instruction = (

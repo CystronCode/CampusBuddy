@@ -34,6 +34,35 @@ def embeddings(texts):
         return model.encode(texts, normalize_embeddings=True).tolist(), "sentence-transformers:" + Path(
             settings().embedding_model_path
         ).name
+    config = settings()
+    if config.gemini_api_key and config.app_env != "test" and texts:
+        try:
+            import httpx
+            reqs = [
+                {
+                    "model": "models/gemini-embedding-001",
+                    "content": {"parts": [{"text": str(t)[:2000]}]},
+                    "outputDimensionality": 384,
+                }
+                for t in texts
+            ]
+            vectors = []
+            for i in range(0, len(reqs), 50):
+                batch = reqs[i : i + 50]
+                with httpx.Client(timeout=15) as client:
+                    resp = client.post(
+                        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key={config.gemini_api_key}",
+                        json={"requests": batch},
+                    )
+                if resp.status_code == 200:
+                    for emb in resp.json().get("embeddings", []):
+                        vals = emb.get("values", [])
+                        if len(vals) == 384:
+                            vectors.append(vals)
+            if len(vectors) == len(texts):
+                return vectors, "gemini-embedding-001:384"
+        except Exception:
+            pass
     return HashingVectorizer(n_features=384, alternate_sign=False, norm="l2").transform(
         texts
     ).toarray().tolist(), "lexical-hashing-v1:384"
