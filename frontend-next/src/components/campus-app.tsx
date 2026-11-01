@@ -130,33 +130,76 @@ export function Logo() {
   );
 }
 const loginSchema = z.object({
-  email: z.email("Enter a valid email address."),
-  password: z.string().min(8, "Use at least eight characters."),
+  email: z.string().email("Enter a valid email address."),
+  password: z.string().min(6, "Use at least six characters."),
 });
 
-function Login() {
+function Login({ onSession }: { onSession?: (s: Session) => void }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const {
     register,
     handleSubmit,
+    setValue,
     getValues,
     formState: { errors },
   } = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
   });
   async function submit(values: z.infer<typeof loginSchema>) {
-    if (!supabase) return;
     setBusy(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword(values);
-    setError(error?.message || "");
+
+    // 1. Try institutional API login first (handles student@campus.edu.in, admin@campus.edu.in)
+    try {
+      const res = await fetch(`${API}/v1/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.session) {
+          localStorage.setItem("campusos_session", JSON.stringify(data.session));
+          if (onSession) onSession(data.session as unknown as Session);
+          setBusy(false);
+          return;
+        }
+      } else if (values.email.toLowerCase().endsWith("@campus.edu.in")) {
+        const errJson = await res.json().catch(() => ({}));
+        setError(errJson.detail || "Invalid institutional credentials.");
+        setBusy(false);
+        return;
+      }
+    } catch {
+      // Backend may be warming up or offline, fallback to Supabase
+    }
+
+    // 2. Fallback to Supabase Auth
+    if (supabase) {
+      const { data, error: sbError } = await supabase.auth.signInWithPassword(values);
+      if (sbError) {
+        setError(sbError.message || "Invalid credentials.");
+      } else if (data?.session) {
+        localStorage.setItem("campusos_session", JSON.stringify(data.session));
+        if (onSession) onSession(data.session);
+      }
+    } else {
+      setError("Unable to authenticate. Please verify your credentials.");
+    }
     setBusy(false);
   }
+
+  function fillDemo(email: string, pass: string) {
+    setValue("email", email, { shouldValidate: true });
+    setValue("password", pass, { shouldValidate: true });
+    setError("");
+  }
+
   async function reset() {
     const email = getValues("email");
-    if (!z.email().safeParse(email).success) {
+    if (!z.string().email().safeParse(email).success) {
       setError("Enter your email address first.");
       return;
     }
@@ -209,88 +252,90 @@ function Login() {
         <div className="login-form">
           <div className="eyebrow">YOUR CAMPUS WORKSPACE</div>
           <h2>Welcome to CampusOS</h2>
-          <p>Sign in with your institution account to continue.</p>
-          {!supabase ? (
-            <div className="setup-note">
-              <strong>Connect your institution to get started</strong>
-              <p>
-                This local installation needs Supabase Auth configuration. Add
-                your project URL and publishable key to{" "}
-                <code>frontend/.env.local</code>, configure the backend, and
-                restart.
-              </p>
-              <p>
-                Follow <code>docs/deployment.md</code> to create your first
-                institution and membership. CampusOS never grants access based
-                on an email address alone.
-              </p>
-              <a
-                className="text-link"
-                href="https://supabase.com/dashboard"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open Supabase dashboard <ArrowUpRight size={14} />
-              </a>
+          <p>Sign in with your student or administrative account.</p>
+
+          <div className="demo-credentials" style={{ margin: "16px 0 20px" }}>
+            <div className="demo-credentials-header">
+              <span>Quick Demo Accounts (1-Click Fill)</span>
             </div>
-          ) : (
-            <>
-              <ErrorBox message={error} />
-              {sent && (
-                <div className="success" role="status">
-                  Check your inbox for the password reset link.
-                </div>
-              )}
-              <form onSubmit={handleSubmit(submit)} noValidate>
-                <div>
-                  <label htmlFor="email">Institution email</label>
-                  <input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@institution.edu"
-                    {...register("email")}
-                    aria-invalid={!!errors.email}
-                    aria-describedby={errors.email ? "email-error" : undefined}
-                  />
-                  {errors.email && (
-                    <p id="email-error" className="status-warn">
-                      {errors.email.message}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label htmlFor="password">Password</label>
-                  <input
-                    id="password"
-                    type="password"
-                    autoComplete="current-password"
-                    {...register("password")}
-                    aria-invalid={!!errors.password}
-                  />
-                  {errors.password && (
-                    <p className="status-warn">{errors.password.message}</p>
-                  )}
-                </div>
-                <Button type="submit" disabled={busy}>
-                  {busy ? <LoaderCircle className="spin" size={17} /> : null}
-                  Sign in <ArrowRight size={16} />
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={reset}
-                  disabled={busy}
-                >
-                  Forgot your password?
-                </Button>
-              </form>
-              <p className="subtle" style={{ marginTop: 24 }}>
-                New here? Your institution administrator can invite you and
-                assign your campus access.
-              </p>
-            </>
+            <div className="demo-pills-row">
+              <button
+                type="button"
+                className="demo-pill student"
+                onClick={() => fillDemo("student@campus.edu.in", "123456")}
+              >
+                <span className="demo-tag student">Student</span>
+                <span className="demo-info">student@campus.edu.in · 123456</span>
+              </button>
+              <button
+                type="button"
+                className="demo-pill admin"
+                onClick={() => fillDemo("admin@campus.edu.in", "CampusAdmin123!")}
+              >
+                <span className="demo-tag admin">Admin</span>
+                <span className="demo-info">admin@campus.edu.in</span>
+              </button>
+            </div>
+          </div>
+
+          <ErrorBox message={error} />
+          {sent && (
+            <div className="success" role="status">
+              Check your inbox for the password reset link.
+            </div>
           )}
+          <form onSubmit={handleSubmit(submit)} noValidate>
+            <div>
+              <label htmlFor="email">Institution email</label>
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="student@campus.edu.in"
+                {...register("email")}
+                aria-invalid={!!errors.email}
+                aria-describedby={errors.email ? "email-error" : undefined}
+              />
+              {errors.email && (
+                <p id="email-error" className="status-warn">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+            <div>
+              <label htmlFor="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••"
+                {...register("password")}
+                aria-invalid={!!errors.password}
+              />
+              {errors.password && (
+                <p className="status-warn">{errors.password.message}</p>
+              )}
+            </div>
+            <Button type="submit" disabled={busy}>
+              {busy ? <LoaderCircle className="spin" size={17} /> : null}
+              Sign in <ArrowRight size={16} />
+            </Button>
+            {supabase && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={reset}
+                disabled={busy}
+              >
+                Forgot your password?
+              </Button>
+            )}
+          </form>
+          <p className="subtle" style={{ marginTop: 20 }}>
+            Role-Based Access Control is automatically applied: Students see tailored
+            classes, budget canteens, and personal schedules; Admins access the Campus
+            Management console and data ingestion.
+          </p>
         </div>
       </section>
     </main>
@@ -310,6 +355,22 @@ export function CampusApp() {
   const [revision, setRevision] = useState(0);
   const [queued, setQueued] = useState("");
   useEffect(() => {
+    // 1. Check saved institutional session first
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("campusos_session");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed?.access_token && parsed?.user) {
+            setSession(parsed as Session);
+            setAuthLoading(false);
+            return;
+          }
+        } catch {
+          localStorage.removeItem("campusos_session");
+        }
+      }
+    }
     if (!supabase) {
       setAuthLoading(false);
       return;
@@ -319,7 +380,7 @@ export function CampusApp() {
       setAuthLoading(false);
     });
     const { data } = supabase.auth.onAuthStateChange((_event, next) => {
-      setSession(next);
+      if (next) setSession(next);
     });
     return () => data.subscription.unsubscribe();
   }, []);
@@ -405,13 +466,20 @@ export function CampusApp() {
     [session, tenant],
   );
   async function signOut() {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("campusos_session");
+    }
     await supabase?.auth.signOut();
     setSession(null);
     setProfile(null);
     setPage("Home");
   }
   function navigate(next: Page) {
-    setPage(next);
+    if (!admin && (next === "Admin Console" || next === "System Intelligence")) {
+      setPage("Home");
+    } else {
+      setPage(next);
+    }
     setMobile(false);
     setError("");
   }
@@ -420,7 +488,7 @@ export function CampusApp() {
     navigate("Ask CampusOS");
   }
   if (authLoading) return <Loading />;
-  if (!session) return <Login />;
+  if (!session) return <Login onSession={(s) => setSession(s)} />;
   if (
     !profile ||
     profile.tenant_id !== tenant ||
@@ -508,7 +576,9 @@ export function CampusApp() {
         }}
       >
         <Logo />
-        <div className="workspace-label">YOUR WORKSPACE</div>
+        <div className="workspace-label">
+          {admin ? "CAMPUS WORKSPACE" : "STUDENT WORKSPACE"}
+        </div>
         <nav aria-label="Main navigation">
           {primary.map(([label, Icon]) => (
             <button
@@ -574,16 +644,21 @@ export function CampusApp() {
           </div>
           <div className="sidebar-person">
             <div className="avatar">{profile.name[0]}</div>
-            <div>
-              <strong>{profile.name}</strong>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <strong style={{ fontSize: 13 }}>{profile.name}</strong>
+                <span className={`role-badge ${admin ? "admin" : "student"}`}>
+                  {admin ? "Admin" : "Student"}
+                </span>
+              </div>
               <p>
-                {profile.department} · Sem {profile.semester} ·{" "}
-                {profile.section}
+                {profile.department} · Sem {profile.semester} · {profile.section}
               </p>
             </div>
             <button
               aria-label="Sign out"
               onClick={signOut}
+              title="Sign out"
               style={{
                 marginLeft: "auto",
                 background: "none",
@@ -591,6 +666,7 @@ export function CampusApp() {
                 color: "#64748b",
                 minWidth: 36,
                 minHeight: 44,
+                cursor: "pointer",
               }}
             >
               <LogOut size={16} />
@@ -652,7 +728,19 @@ export function CampusApp() {
               consumed={() => setQueued("")}
             />
           ) : page === "Admin Console" || page === "System Intelligence" ? (
-            <AdminView w={w} developer={page === "System Intelligence"} />
+            admin ? (
+              <AdminView w={w} developer={page === "System Intelligence"} />
+            ) : (
+              <div className="panel" style={{ textAlign: "center", padding: "48px 24px" }}>
+                <ShieldCheck size={40} color="#ef4444" style={{ margin: "0 auto 16px" }} />
+                <h2 style={{ fontSize: 20 }}>Administrative Access Restricted</h2>
+                <p className="subtle" style={{ maxWidth: 460, margin: "12px auto 24px", lineHeight: 1.6 }}>
+                  You are currently logged in as a student (<strong>{profile.name}</strong>).
+                  Campus administration, vision data ingestion, and system controls are restricted to authorized administrators.
+                </p>
+                <Button onClick={() => setPage("Home")}>Return to Student Portal</Button>
+              </div>
+            )
           ) : page === "Settings" ? (
             <SettingsView w={w} />
           ) : (
@@ -709,12 +797,20 @@ function HomeView({
     <>
       <div className="page-heading">
         <div>
-          <div className="eyebrow">A LITTLE CLARITY FOR YOUR EVERYDAY</div>
+          <div className="eyebrow">
+            {w.profile.role === "student"
+              ? "STUDENT PORTAL · ACADEMIC LIFE & SERVICES"
+              : "CAMPUS INTELLIGENCE · ADMINISTRATIVE CONSOLE"}
+          </div>
           <h1>
             Good to see you, {w.profile.name.split(" ")[0]}{" "}
             <span aria-hidden="true">☀</span>
           </h1>
-          <p>Let’s make the most of your campus day.</p>
+          <p>
+            {w.profile.role === "student"
+              ? `Your schedule, mess updates, and campus resources for ${w.profile.department} Semester ${w.profile.semester}.`
+              : "Let’s make the most of your campus day."}
+          </p>
         </div>
         <div className="date-label">{prettyDate(today)}</div>
       </div>

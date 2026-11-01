@@ -1442,8 +1442,141 @@ td {
 @media (max-width: 767px) {
   .sidebar {
     visibility: hidden;
+    z-index: 60;
   }
   .sidebar.open {
     visibility: visible;
+  }
+  .overlay.visible {
+    z-index: 55;
+  }
+}
+
+/* Role Badges (RBAC) */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  line-height: 1.2;
+}
+.role-badge.student {
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+.role-badge.admin {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+
+/* Quick Demo Logins */
+.demo-credentials {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px;
+}
+.demo-credentials-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+.demo-pills-row {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.demo-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-size: 12px;
+}
+.demo-pill:hover {
+  border-color: #6366f1;
+  background: #f5f3ff;
+}
+.demo-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+.demo-tag.student {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+.demo-tag.admin {
+  background: #d1fae5;
+  color: #047857;
+}
+.demo-info {
+  font-family: monospace;
+  color: #475569;
+  font-size: 11px;
+}
+
+/* Academic Profile Grid */
+.academic-badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+/* Mobile & Tablet Responsiveness Enhancements */
+@media (max-width: 580px) {
+  .food-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .stat-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .academic-badges-grid {
+    grid-template-columns: 1fr;
+  }
+  .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .quick-action {
+    min-height: 42px;
+    font-size: 11px;
+    padding: 8px;
+    justify-content: center;
+  }
+  .filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+  .filter-field {
+    flex-shrink: 0;
+  }
+  .login-form-wrap {
+    padding: 24px 16px;
+  }
+  .content {
+    padding: 18px 14px 40px;
+  }
+  .topbar {
+    padding: 0 14px;
   }
 }

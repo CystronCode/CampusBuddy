@@ -127,7 +127,31 @@ export function SettingsView({ w }: { w: Workspace }) {
         </div>
       )}
       <section className="panel">
-        <h2 style={{ marginBottom: 20 }}>About you</h2>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          <h2 style={{ margin: 0 }}>Academic Profile</h2>
+          <span className={`role-badge ${w.profile.role === "institution_admin" ? "admin" : "student"}`}>
+            {w.profile.role === "institution_admin" ? "Campus Administrator" : "Verified Student"}
+          </span>
+        </div>
+        <div className="academic-badges-grid" style={{ marginBottom: 20 }}>
+          <div className="stat-card" style={{ padding: 14 }}>
+            <span className="stat-label">Department</span>
+            <strong style={{ fontSize: 16 }}>{w.profile.department}</strong>
+          </div>
+          <div className="stat-card" style={{ padding: 14 }}>
+            <span className="stat-label">Semester / Year</span>
+            <strong style={{ fontSize: 16 }}>Semester {w.profile.semester} (Year 3)</strong>
+          </div>
+          <div className="stat-card" style={{ padding: 14 }}>
+            <span className="stat-label">Section</span>
+            <strong style={{ fontSize: 16 }}>Section {w.profile.section}</strong>
+          </div>
+          <div className="stat-card" style={{ padding: 14 }}>
+            <span className="stat-label">Institution</span>
+            <strong style={{ fontSize: 16 }}>{w.profile.institution}</strong>
+          </div>
+        </div>
+        <h2 style={{ marginBottom: 20 }}>Personal preferences</h2>
         <form className="settings-form" onSubmit={save}>
           <div>
             <label htmlFor="preferred-name">Preferred name</label>
@@ -160,9 +184,8 @@ export function SettingsView({ w }: { w: Workspace }) {
             </select>
           </div>
           <p className="subtle">
-            {w.profile.department} · Semester {w.profile.semester} · Section{" "}
-            {w.profile.section}. Your administrator manages these academic
-            details.
+            Academic records are officially verified by your campus administration.
+            Timetable, meal recommendations, and notifications are customized to your section.
           </p>
           <Button type="submit" disabled={busy}>
             Save preferences

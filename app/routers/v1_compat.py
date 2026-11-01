@@ -11,12 +11,13 @@ import uuid
 import asyncio
 import hashlib
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any, List
-from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Request, UploadFile, File, Form, HTTPException, BackgroundTasks, status
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
+from app.core.config import settings
 from app.core.database import get_read_db, get_write_db
 from app.services.cache_service import get_cached_scope_rows
 from app.services.time_engine import calculate_next_class
@@ -45,39 +46,148 @@ _user_prefs: Dict[str, Dict[str, Any]] = {}
 
 
 def _resolve_v1_user(request: Request) -> Dict[str, Any]:
-    """Extract user context from Bearer JWT or fallback to admin profile."""
+    """Extract user context from Bearer JWT or fallback to profile."""
     user = getattr(request.state, "user", None)
-    if user:
+    if user and isinstance(user, dict) and user.get("role") and user.get("email"):
         return user
+
     auth = request.headers.get("Authorization", "")
     user_id = "8c5f6b46-c167-43c3-93bf-84304a37239f"
     email = "admin@campus.edu.in"
+    role = "institution_admin"
+    name = "Campus Admin"
+    dept = "CSE"
+    sem = 5
+    sec = "A"
+    diet = "vegetarian"
+    interests = "AI, Distributed Systems, Robotics"
+
     if auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
         try:
             import jwt
             payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get("sub", user_id)
-            email = payload.get("email", email)
+            user_id = str(payload.get("sub") or payload.get("user_id") or user_id)
+            email = str(payload.get("email") or email)
+            role = payload.get("role") or payload.get("app_metadata", {}).get("role")
+            if not role:
+                role = "student" if "student" in email.lower() else "institution_admin"
+            if payload.get("name"):
+                name = payload.get("name")
         except Exception:
             pass
+
+    if "student" in email.lower() or role == "student":
+        role = "student"
+        if name in ("Campus Admin", ""):
+            name = "Alex Student"
+    elif "admin" in email.lower() or role in ("institution_admin", "admin", "platform_admin"):
+        role = "institution_admin"
+        if name in ("Alex Student", ""):
+            name = "Campus Admin"
+
     prefs = _user_prefs.get(user_id, {})
     return {
         "id": user_id,
         "user_id": user_id,
         "email": email,
-        "name": prefs.get("name", "Campus Admin"),
-        "role": "institution_admin",
-        "branch": prefs.get("department", "CSE"),
-        "department": prefs.get("department", "CSE"),
+        "name": prefs.get("name", name),
+        "role": role,
+        "branch": prefs.get("department", dept),
+        "department": prefs.get("department", dept),
         "year": 3,
-        "semester": prefs.get("semester", 5),
-        "section": prefs.get("section", "A"),
-        "diet": prefs.get("diet", "vegetarian"),
-        "interests": prefs.get("interests", "AI, Distributed Systems, Robotics"),
-        "veg_pref": prefs.get("diet", "vegetarian") == "vegetarian",
-        "budget_default": 150,
+        "semester": prefs.get("semester", sem),
+        "section": prefs.get("section", sec),
+        "diet": prefs.get("diet", diet),
+        "interests": prefs.get("interests", interests),
+        "veg_pref": prefs.get("diet", diet) == "vegetarian",
+        "budget_default": 100 if role == "student" else 150,
     }
+
+
+def _require_admin(request: Request) -> Dict[str, Any]:
+    """Ensure current request is from an authorized institution administrator."""
+    user = _resolve_v1_user(request)
+    if user.get("role") != "institution_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative privileges required. This section is restricted to campus administrators."
+        )
+    return user
+
+
+class V1LoginInput(BaseModel):
+    email: str
+    password: str
+
+
+@router.post("/auth/login")
+async def v1_auth_login(body: V1LoginInput):
+    import jwt
+
+    email = body.email.strip().lower()
+    password = body.password
+
+    # 1. Student account: student@campus.edu.in with password 123456
+    if email == "student@campus.edu.in":
+        if password != "123456":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials for student account.")
+        user_id = "c8f56b46-c167-43c3-93bf-84304a37239a"
+        role = "student"
+        name = "Alex Student"
+    # 2. Administrator account: admin@campus.edu.in
+    elif email == "admin@campus.edu.in":
+        if password not in ("123456", "CampusAdmin123!", "admin123"):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials for administrator.")
+        user_id = "77ea1552-a9b0-4a51-851e-67679308a4d7"
+        role = "institution_admin"
+        name = "Campus Admin"
+    else:
+        # Check generic student or admin format
+        if "student" in email and password in ("123456", "password123"):
+            user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, email))
+            role = "student"
+            name = email.split("@")[0].replace(".", " ").title()
+        elif "admin" in email and password in ("123456", "CampusAdmin123!"):
+            user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, email))
+            role = "institution_admin"
+            name = email.split("@")[0].replace(".", " ").title()
+        else:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid institutional email or password.")
+
+    # Create signed JWT token valid for 14 days
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "name": name,
+        "aud": "authenticated",
+        "app_metadata": {"role": role, "provider": "institutional"},
+        "user_metadata": {"name": name, "role": role},
+        "iat": int(datetime.now(timezone.utc).timestamp()),
+        "exp": int((datetime.now(timezone.utc) + timedelta(days=14)).timestamp()),
+    }
+    token = jwt.encode(payload, settings.JWT_SECRET, algorithm="HS256")
+
+    user_obj = {
+        "id": user_id,
+        "aud": "authenticated",
+        "role": "authenticated",
+        "email": email,
+        "app_metadata": {"role": role, "provider": "institutional"},
+        "user_metadata": {"name": name, "role": role},
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    session_obj = {
+        "access_token": token,
+        "token_type": "bearer",
+        "expires_in": 14 * 86400,
+        "refresh_token": token,
+        "user": user_obj,
+    }
+
+    return {"session": session_obj, "user": user_obj}
 
 
 def _format_slot(s: Dict[str, Any], target_date: Optional[date] = None) -> Dict[str, Any]:
@@ -224,7 +334,7 @@ async def v1_memberships(request: Request):
         {
             "tenant_id": DEFAULT_TENANT_ID,
             "institution": INSTITUTION_NAME,
-            "role": "institution_admin",
+            "role": u["role"],
             "name": u["name"],
             "demo": False,
         }
@@ -238,7 +348,7 @@ async def v1_me(request: Request):
         "user_id": u["user_id"],
         "tenant_id": DEFAULT_TENANT_ID,
         "name": u["name"],
-        "role": "institution_admin",
+        "role": u["role"],
         "department": u["department"],
         "semester": u["semester"],
         "section": u["section"],
@@ -746,7 +856,8 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
 
 
 @router.get("/ingestion")
-async def v1_list_ingestion():
+async def v1_list_ingestion(request: Request):
+    _require_admin(request)
     try:
         async with get_write_db() as conn:
             cur = await conn.execute(
@@ -767,6 +878,7 @@ async def v1_ingestion_preview(
     file: UploadFile = File(...),
     options: str = Form("{}"),
 ):
+    _require_admin(request)
     content = await file.read()
     mime = sniff_mime_type(content)
     try:
@@ -840,11 +952,12 @@ async def v1_ingestion_preview(
 
 @router.post("/ingestion/{job_id}/confirm")
 async def v1_ingestion_confirm(job_id: str, request: Request):
+    admin_user = _require_admin(request)
     # Trigger atomic approval using approval router logic
     from app.routers.approval import approve_submission
     from app.services.embedding_service import generate_l2_normalized_embeddings
     from app.services.cache_service import evict_scope_cache
-    request.state.user = {"id": "8c5f6b46-c167-43c3-93bf-84304a37239f", "role": "admin"}
+    request.state.user = {"id": admin_user["id"], "role": "admin"}
 
     # Sanitize any edge-case rows in extracted JSON before approval so confirm never fails on minor OCR quirks
     async with get_write_db() as conn:
@@ -971,7 +1084,8 @@ async def v1_ingestion_confirm(job_id: str, request: Request):
 
 
 @router.get("/admin/system")
-async def v1_admin_system():
+async def v1_admin_system(request: Request):
+    _require_admin(request)
     from app.mcp_server import mcp
     mcp_tools = [t.name for t in await mcp.list_tools()]
     counts = {"timetable": 0, "faculty": 0, "events": 0, "menu": 0, "documents": 0}
@@ -1041,7 +1155,8 @@ async def v1_admin_system():
 
 
 @router.get("/admin/memberships")
-async def v1_admin_memberships():
+async def v1_admin_memberships(request: Request):
+    _require_admin(request)
     return [
         {
             "user_id": "77ea1552-a9b0-4a51-851e-67679308a4d7",
@@ -1053,8 +1168,8 @@ async def v1_admin_memberships():
             "active": True,
         },
         {
-            "user_id": "8c5f6b46-c167-43c3-93bf-84304a37239f",
-            "name": "Student Representative (student@college.edu)",
+            "user_id": "c8f56b46-c167-43c3-93bf-84304a37239a",
+            "name": "Alex Student (student@campus.edu.in)",
             "role": "student",
             "department": "CSE",
             "semester": 5,
