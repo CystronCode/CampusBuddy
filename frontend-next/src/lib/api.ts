@@ -11,7 +11,18 @@ export const supabase =
         },
       })
     : null;
-export const API = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API = (() => {
+  if (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
+  }
+  if (typeof window !== "undefined") {
+    // In production browser: if not on localhost, use relative path "" (routes via Next.js proxy)
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return "";
+    }
+  }
+  return "http://localhost:8000";
+})();
 
 export async function api<T>(
   path: string,

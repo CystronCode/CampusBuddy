@@ -32,6 +32,10 @@ class Settings(BaseModel):
             "https://app.campus.edu,http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000"
         ).split(",") if o.strip()
     ]
+    ALLOWED_ORIGIN_REGEX: str | None = os.environ.get(
+        "ALLOWED_ORIGIN_REGEX",
+        r"^https:\/\/.*\.vercel\.app$"
+    )
     STORAGE_ENDPOINT: str = os.environ.get("STORAGE_ENDPOINT", "https://s3.us-east-1.amazonaws.com")
     STORAGE_BUCKET: str = os.environ.get("STORAGE_BUCKET", "campus-intelligence-private")
     STORAGE_ACCESS_KEY: str = os.environ.get("STORAGE_ACCESS_KEY", "mock_storage_access_key")
