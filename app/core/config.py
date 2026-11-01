@@ -19,8 +19,7 @@ def ensure_ipv4_supabase_url(url: str) -> str:
     """
     if "db.qfrrcwsetmbggreiefcd.supabase.co" in url:
         url = url.replace("postgresql://postgres:", "postgresql://postgres.qfrrcwsetmbggreiefcd:")
-        url = url.replace("postgres://postgres:", "postgres://postgres.qfrrcwsetmbggreiefcd:")
-        url = url.replace("@db.qfrrcwsetmbggreiefcd.supabase.co:5432", "@aws-0-ap-northeast-1.pooler.supabase.com:6543")
+        url = url.replace("@db.qfrrcwsetmbggreiefcd.supabase.co:5432/", "@aws-0-ap-northeast-1.pooler.supabase.com:6543/")
     return url
 
 _DEFAULT_ORIGINS = [
