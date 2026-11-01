@@ -91,6 +91,7 @@ async def extract_via_gemini_vision(content: bytes, mime: str, schema_cls: Any) 
                         types.Part.from_bytes(data=content, mime_type=mime),
                         "Extract structured records adhering precisely to the JSON schema. "
                         "For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays. "
+                        "For faculty profiles or directories, extract ALL details in full (not just contact info): educational qualifications, degrees, teaching/research/industry experience, research interests, courses/subjects taught, publications/journals/conferences/patents, funded projects/grants, awards/memberships, administrative responsibilities, and a comprehensive bio summary. "
                         "Output valid JSON without markdown wrapping or code fences."
                     ],
                     config=types.GenerateContentConfig(
@@ -152,6 +153,10 @@ async def enqueue_extraction_task(
                         if isinstance(cand, dict):
                             for k in ("holidays", "items", "slots", "faculty"):
                                 if len(cand.get(k, [])) > 0:
+                                    if k == "faculty":
+                                        first_fac = cand["faculty"][0] if isinstance(cand["faculty"][0], dict) else {}
+                                        if not any(first_fac.get(f) for f in ("qualifications", "experience", "publications", "bio", "research_interests")):
+                                            continue
                                     extracted_data = cand
                                     logger.info("Reusing existing extraction for sha256 %s (%s rows)", file_sha256[:10], len(cand[k]))
                                     break
@@ -190,7 +195,8 @@ async def enqueue_extraction_task(
                     if has_text_layer and client is not None and target_schema is not None:
                         prompt = (
                             f"Convert the following campus raw text into structured JSON adhering to the schema. "
-                            f"For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays:\n{text_layer}"
+                            f"For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays. "
+                            f"For faculty profiles or directories, extract ALL details in full (not just contact info): educational qualifications, degrees, teaching/research/industry experience, research interests, courses/subjects taught, publications/journals/conferences/patents, funded projects/grants, awards/memberships, administrative responsibilities, and a comprehensive bio summary:\n{text_layer}"
                         )
                         for m in CANDIDATE_MODELS:
                             try:
@@ -256,6 +262,13 @@ async def enqueue_extraction_task(
                         extracted_data = {"title": "Event", "description": ""}
                     else:
                         extracted_data = {}
+
+                if data_type == "faculty" and isinstance(extracted_data, dict):
+                    if text_layer.strip():
+                        extracted_data["raw_text"] = text_layer
+                    for fac_item in extracted_data.get("faculty", []):
+                        if isinstance(fac_item, dict) and not fac_item.get("bio") and text_layer.strip():
+                            fac_item["bio"] = " ".join(text_layer.split())[:1500]
 
             # 2. Execute Deterministic Validators
             confidence_flags = await run_deterministic_validators(data_type, extracted_data, metadata)

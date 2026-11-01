@@ -82,16 +82,35 @@ async def execute_tool(
 
     elif tool_name == "get_faculty":
         fac_list = await get_cached_scope_rows("faculty", "faculty:all")
-        query_name = str(args.get("name", "")).lower()
-        query_subject = str(args.get("subject", "")).lower()
-        
+        query_name = str(args.get("name") or "").lower().strip()
+        query_subject = str(args.get("subject") or "").lower().strip()
+        for prefix in ("dr. ", "dr ", "prof. ", "prof ", "mr. ", "mr ", "ms. ", "ms ", "mrs. ", "mrs "):
+            if query_name.startswith(prefix):
+                query_name = query_name[len(prefix):].strip()
+
         matches = []
         for f in fac_list:
-            name_match = not query_name or query_name in f.get("name", "").lower()
-            subj_text = str(f.get("subjects_text", "")).lower()
-            subj_match = not query_subject or query_subject in subj_text
-            if name_match and subj_match:
+            blob = " ".join([
+                str(f.get("name", "")),
+                str(f.get("full_name", "")),
+                str(f.get("short_code", "")),
+                str(f.get("department", "")),
+                str(f.get("designation", "")),
+                str(f.get("subjects_text", "")),
+                str(f.get("submission_extracted", "")),
+            ]).lower()
+            if not query_name and not query_subject:
                 matches.append(f)
+            elif query_name and query_subject and query_name == query_subject:
+                if query_name in blob or any(tok in blob for tok in query_name.split() if len(tok) > 2):
+                    matches.append(f)
+            else:
+                name_ok = not query_name or query_name in blob or any(tok in blob for tok in query_name.split() if len(tok) > 2)
+                subj_ok = not query_subject or query_subject in blob or any(tok in blob for tok in query_subject.split() if len(tok) > 2)
+                if (query_name and name_ok) or (query_subject and subj_ok):
+                    matches.append(f)
+        if not matches and fac_list:
+            matches = fac_list[:5]
         return {"tool": "get_faculty", "matches": matches[:5]}
 
     elif tool_name == "search_menu":

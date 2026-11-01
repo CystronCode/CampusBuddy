@@ -452,24 +452,89 @@ async def v1_meals(budget: float = 150, vegetarian: Optional[bool] = None, count
     return combos[:12]
 
 
+def _format_faculty(f: Dict[str, Any], idx: int = 0) -> Dict[str, Any]:
+    name = f.get("name") or f.get("full_name") or "Faculty Member"
+    ext = f.get("submission_extracted") or {}
+    if isinstance(ext, str):
+        try:
+            ext = json.loads(ext)
+        except Exception:
+            ext = {}
+    ext_fac: Dict[str, Any] = {}
+    if isinstance(ext, dict):
+        fac_list = ext.get("faculty") or []
+        for cand in fac_list:
+            if isinstance(cand, dict) and str(cand.get("name", "")).lower().strip() == name.lower().strip():
+                ext_fac = cand
+                break
+        if not ext_fac and fac_list and isinstance(fac_list[0], dict):
+            ext_fac = fac_list[0]
+
+    email = f.get("email") or ext_fac.get("email") or ""
+    phone = f.get("phone") or ext_fac.get("phone") or ""
+    contact = " · ".join([x for x in (email, phone) if x])
+    subjects = f.get("subjects") or ext_fac.get("subjects") or []
+    research_interests = f.get("research_interests") or ext_fac.get("research_interests") or []
+    qualifications = f.get("qualifications") or ext_fac.get("qualifications") or ""
+    experience = f.get("experience") or ext_fac.get("experience") or ""
+    publications = f.get("publications") or ext_fac.get("publications") or ""
+    projects = f.get("projects") or ext_fac.get("projects") or ""
+    awards = f.get("awards") or ext_fac.get("awards") or ""
+    responsibilities = f.get("responsibilities") or ext_fac.get("responsibilities") or ""
+    bio = f.get("bio") or ext_fac.get("bio") or ""
+    if not bio and f.get("subjects_text") and "|" in str(f.get("subjects_text")):
+        bio = str(f.get("subjects_text"))
+
+    item: Dict[str, Any] = {
+        "id": str(f.get("id", f"fac-{idx}")),
+        "name": name,
+        "code": f.get("short_code") or ext_fac.get("short_code") or "",
+        "department": f.get("department") or f.get("branch") or ext_fac.get("department") or "CSE",
+        "designation": f.get("designation") or ext_fac.get("designation") or "Professor",
+        "email": email,
+        "phone": phone,
+        "contact": contact,
+        "office": f.get("cabin") or ext_fac.get("cabin") or "Department Faculty Room",
+        "office_hours": f.get("office_hours") or ext_fac.get("office_hours") or "Mon-Fri 10:00-16:00",
+        "subjects": subjects,
+        "qualifications": qualifications,
+        "experience": experience,
+        "research_interests": research_interests,
+        "publications": publications,
+        "projects": projects,
+        "awards": awards,
+        "responsibilities": responsibilities,
+        "bio": bio,
+        "demo": False,
+    }
+    if f.get("file_id"):
+        item["source_id"] = str(f["file_id"])
+    return item
+
+
 @router.get("/faculty")
 async def v1_faculty(query: str = ""):
     fac = await get_cached_scope_rows("faculty", "faculty:all")
     res = []
+    q = query.lower().strip()
     for i, f in enumerate(fac):
-        item = {
-            "id": str(f.get("id", f"fac-{i}")),
-            "name": f.get("name", "Faculty Member"),
-            "code": f.get("short_code") or "",
-            "department": f.get("department") or "CSE",
-            "designation": f.get("designation") or "Professor",
-            "email": f.get("email") or "",
-            "office": f.get("cabin") or "Main Block",
-            "office_hours": f.get("office_hours") or "Mon-Fri 10:00-16:00",
-            "subjects": f.get("subjects") or [],
-            "demo": False,
-        }
-        if not query or query.lower() in item["name"].lower() or query.lower() in item["department"].lower() or query.lower() in item["code"].lower():
+        item = _format_faculty(f, i)
+        searchable = " ".join([
+            str(item.get("name", "")),
+            str(item.get("department", "")),
+            str(item.get("code", "")),
+            str(item.get("designation", "")),
+            " ".join(item.get("subjects") or []),
+            " ".join(item.get("research_interests") or []),
+            str(item.get("qualifications", "")),
+            str(item.get("experience", "")),
+            str(item.get("publications", "")),
+            str(item.get("projects", "")),
+            str(item.get("awards", "")),
+            str(item.get("responsibilities", "")),
+            str(item.get("bio", "")),
+        ]).lower()
+        if not q or q in searchable or any(tok in searchable for tok in q.split() if len(tok) > 2):
             res.append(item)
     return res
 
@@ -738,18 +803,50 @@ async def _process_v1_chat(body: V1ChatInput, user: Dict[str, Any]) -> Dict[str,
                 parts.append(f"Found {len(hols)} calendar dates.")
             elif tname == "get_faculty":
                 facs = r.get("matches") or r.get("faculty", [])
+                fac_summaries = []
                 for i, f in enumerate(facs[:8]):
-                    records.append({
-                        "id": str(f.get("id", f"fac-{i}")),
-                        "name": f.get("name") or f.get("full_name", "Faculty"),
-                        "department": f.get("department") or f.get("branch", "CSE"),
-                        "designation": f.get("designation") or "Professor",
-                        "office": f.get("cabin") or "Main Block",
-                        "office_hours": "Mon-Fri 10:00-16:00",
-                        "contact": f.get("email") or "",
-                    })
+                    formatted_fac = _format_faculty(f, i)
+                    records.append(formatted_fac)
+                    if formatted_fac.get("source_id") and formatted_fac["source_id"] not in seen_source_ids:
+                        seen_source_ids.add(formatted_fac["source_id"])
+                        sources.append({
+                            "id": formatted_fac["source_id"],
+                            "filename": f"{formatted_fac['name']} Profile ({formatted_fac['department']})",
+                            "demo": False,
+                            "created_at": datetime.now(IST).isoformat(),
+                            "url": "",
+                        })
+                    details = [f"**{formatted_fac['name']}** ({formatted_fac['designation']}, {formatted_fac['department']})"]
+                    if formatted_fac.get("contact"):
+                        details.append(f"Contact: {formatted_fac['contact']}")
+                    if formatted_fac.get("office") and formatted_fac["office"] != "Department Faculty Room":
+                        details.append(f"Cabin: {formatted_fac['office']}")
+                    if formatted_fac.get("subjects"):
+                        subj_s = ", ".join(formatted_fac["subjects"]) if isinstance(formatted_fac["subjects"], list) else str(formatted_fac["subjects"])
+                        details.append(f"Subjects Taught: {subj_s}")
+                    if formatted_fac.get("qualifications"):
+                        details.append(f"Qualifications: {formatted_fac['qualifications']}")
+                    if formatted_fac.get("experience"):
+                        details.append(f"Experience: {formatted_fac['experience']}")
+                    if formatted_fac.get("research_interests"):
+                        ri_s = ", ".join(formatted_fac["research_interests"]) if isinstance(formatted_fac["research_interests"], list) else str(formatted_fac["research_interests"])
+                        details.append(f"Research Interests: {ri_s}")
+                    if formatted_fac.get("publications"):
+                        details.append(f"Publications & Patents: {formatted_fac['publications']}")
+                    if formatted_fac.get("projects"):
+                        details.append(f"Projects & Guidance: {formatted_fac['projects']}")
+                    if formatted_fac.get("awards"):
+                        details.append(f"Awards & Memberships: {formatted_fac['awards']}")
+                    if formatted_fac.get("responsibilities"):
+                        details.append(f"Responsibilities: {formatted_fac['responsibilities']}")
+                    if formatted_fac.get("bio"):
+                        details.append(f"Profile Summary: {formatted_fac['bio']}")
+                    fac_summaries.append("\n".join(details))
                 kind = "faculty"
-                parts.append(f"Found {len(facs)} faculty members.")
+                if fac_summaries:
+                    parts.append("\n\n".join(fac_summaries))
+                else:
+                    parts.append("No matching faculty records found.")
             elif tname == "get_events":
                 evs = r.get("events", [])
                 for i, e in enumerate(evs[:8]):
@@ -1058,11 +1155,14 @@ async def v1_ingestion_confirm(job_id: str, request: Request):
             if rows and dtype in ("menu", "timetable", "faculty"):
                 lines = [f"# Imported {dtype.capitalize()} Records"]
                 for r in rows[:80]:
-                    lines.append("- " + ", ".join(f"{k}: {v}" for k, v in r.items() if v is not None))
+                    lines.append("- " + ", ".join(f"{k}: {v}" for k, v in r.items() if v is not None and v != [] and v != ""))
+                if dtype == "faculty" and isinstance(ext, dict) and ext.get("raw_text"):
+                    lines.append("\n## Complete Faculty Document Content\n" + str(ext["raw_text"])[:6000])
                 md_text = "\n".join(lines)
                 emb = await generate_l2_normalized_embeddings([md_text])
-                doc_scope = f"doc:notice:ALL:{dtype}-latest"
-                doc_key = f"notice:ALL:{dtype}-latest"
+                suffix = f"{dtype}-{str(job_id)[:8]}" if dtype == "faculty" else f"{dtype}-latest"
+                doc_scope = f"doc:notice:ALL:{suffix}"
+                doc_key = f"notice:ALL:{suffix}"
                 await conn.execute(
                     """INSERT INTO doc_chunks
                        (scope, doc_key, file_id, submission_id, doc_type, title, doc_title, section,

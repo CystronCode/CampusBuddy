@@ -292,7 +292,24 @@ async def approve_submission(submission_id: str, request: Request):
                     fdept = f.get("department") or f.get("branch") or "CSE"
                     fcode = f.get("short_code") or "".join(w[0].upper() for w in fname.split() if w and w[0].isalpha())[:5] or "FAC"
                     subj_list = f.get("subjects") or []
-                    subj_text = ", ".join(subj_list) if isinstance(subj_list, list) else str(subj_list)
+                    subj_str = ", ".join(subj_list) if isinstance(subj_list, list) else str(subj_list)
+                    extra_parts = [subj_str] if subj_str else []
+                    for label, field in [
+                        ("Qualifications", "qualifications"),
+                        ("Experience", "experience"),
+                        ("Research Interests", "research_interests"),
+                        ("Publications", "publications"),
+                        ("Projects", "projects"),
+                        ("Awards", "awards"),
+                        ("Responsibilities", "responsibilities"),
+                        ("Profile", "bio"),
+                    ]:
+                        val = f.get(field)
+                        if val:
+                            val_str = ", ".join(val) if isinstance(val, list) else str(val).strip()
+                            if val_str:
+                                extra_parts.append(f"{label}: {val_str}")
+                    subj_text = " | ".join(extra_parts)
                     await conn.execute(
                         """INSERT INTO faculty (name, full_name, short_code, department, branch, designation, email, 
                                                 cabin, office_hours, subjects, subjects_text, submission_id)

@@ -34,13 +34,22 @@ class HolidaysExtraction(BaseModel):
 
 class FacultyMember(BaseModel):
     name: str = Field(..., description="Full faculty member name")
-    short_code: Optional[str] = Field(None, description="Faculty abbreviation (e.g. AS, RKM)")
-    department: Optional[str] = Field(None, description="Department code (e.g. CSE, ECE)")
-    designation: Optional[str] = Field(None, description="Designation (e.g. Assistant Professor)")
+    short_code: Optional[str] = Field(None, description="Faculty abbreviation or initials (e.g. AS, RKM, DSN)")
+    department: Optional[str] = Field(None, description="Department name or code (e.g. CSE, CSE (AIML), ECE)")
+    designation: Optional[str] = Field(None, description="Designation / title (e.g. Associate Professor, Professor, Assistant Professor)")
     email: Optional[str] = Field(None, description="Official email address")
-    cabin: Optional[str] = Field(None, description="Office/cabin room number")
-    office_hours: Optional[str] = Field(None, description="Office hours availability")
-    subjects: List[str] = Field(default_factory=list, description="Subjects taught")
+    phone: Optional[str] = Field(None, description="Phone or contact number if mentioned")
+    cabin: Optional[str] = Field(None, description="Office, cabin, or lab room number")
+    office_hours: Optional[str] = Field(None, description="Office hours or availability")
+    subjects: List[str] = Field(default_factory=list, description="Courses or subjects taught")
+    qualifications: Optional[str] = Field(None, description="Educational qualifications, degrees (Ph.D., M.Tech, B.E.), universities, and years")
+    experience: Optional[str] = Field(None, description="Teaching, research, and industry experience (years, institutions, roles)")
+    research_interests: List[str] = Field(default_factory=list, description="Areas of research interest, specialization, or expertise")
+    publications: Optional[str] = Field(None, description="Summary and list of journal papers, conference publications, books, book chapters, or patents")
+    projects: Optional[str] = Field(None, description="Funded research projects, grants, consultancy, or Ph.D./M.Tech guidance details")
+    awards: Optional[str] = Field(None, description="Awards, honors, recognitions, fellowships, or professional body memberships (IEEE, ACM, etc.)")
+    responsibilities: Optional[str] = Field(None, description="Administrative roles, committee memberships, lab in-charge, or departmental responsibilities")
+    bio: Optional[str] = Field(None, description="Comprehensive profile summary capturing all additional biographical, academic, and professional details from the document")
 
 class FacultyExtraction(BaseModel):
     faculty: List[FacultyMember] = Field(default_factory=list)

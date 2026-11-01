@@ -93,15 +93,63 @@ export function RecordCard({
         </div>
       </>
     );
-  else if (kind === "faculty")
+  else if (kind === "faculty") {
+    const contactStr = text(r.contact || r.email);
+    const researchStr = text(r.research_interests);
+    const subjStr = text(r.subjects);
     content = (
       <>
         <div className="record-kicker">
           {text(r.department)} · {text(r.designation)}
+          {r.code ? <span>Code: {text(r.code)}</span> : null}
         </div>
         <h3>{text(r.name)}</h3>
-        <p>{text(r.subjects)}</p>
-        <div className="record-details">
+        {!!r.qualifications && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Qualifications:</strong> {text(r.qualifications)}
+          </p>
+        )}
+        {!!r.experience && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Experience:</strong> {text(r.experience)}
+          </p>
+        )}
+        {!!subjStr && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Subjects:</strong> {subjStr}
+          </p>
+        )}
+        {!!researchStr && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Research Interests:</strong> {researchStr}
+          </p>
+        )}
+        {!!r.publications && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Publications &amp; Patents:</strong> {text(r.publications)}
+          </p>
+        )}
+        {!!r.projects && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Projects &amp; Guidance:</strong> {text(r.projects)}
+          </p>
+        )}
+        {!!r.awards && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Awards &amp; Memberships:</strong> {text(r.awards)}
+          </p>
+        )}
+        {!!r.responsibilities && (
+          <p style={{ fontSize: 13, marginTop: 4 }}>
+            <strong>Responsibilities:</strong> {text(r.responsibilities)}
+          </p>
+        )}
+        {!!r.bio && (
+          <p className="passage" style={{ fontSize: 13, marginTop: 6 }}>
+            {text(r.bio)}
+          </p>
+        )}
+        <div className="record-details" style={{ marginTop: 8 }}>
           <span>
             <MapPin size={14} />
             {text(r.office)}
@@ -111,14 +159,14 @@ export function RecordCard({
             {text(r.office_hours)}
           </span>
         </div>
-        {!!r.contact && (
+        {!!contactStr && (
           <p className="official-contact">
-            Official contact: {text(r.contact)}
+            Official contact: {contactStr}
           </p>
         )}
       </>
     );
-  else if (kind === "events")
+  } else if (kind === "events")
     content = (
       <>
         <div className="record-kicker">
