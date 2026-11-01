@@ -1,36 +1,22 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   GraduationCap,
-  Home,
-  MessagesSquare,
   CalendarDays,
   Utensils,
   FileText,
-  MoreHorizontal,
-  ChevronRight,
-  ChevronDown,
-  Menu,
-  X,
-  LogOut,
-  ShieldCheck,
-  Code2,
-  Search,
-  Sparkles,
   ArrowUpRight,
   Clock3,
   MapPin,
-  UserRound,
   ArrowRight,
   BookOpen,
   LoaderCircle,
   TriangleAlert,
-  Settings,
-  Users,
+  ShieldCheck,
   Compass,
 } from "lucide-react";
 import {
@@ -43,7 +29,6 @@ import {
   type Profile,
   type Membership,
   type Overview,
-  type DataRecord,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Empty, DemoBadge } from "@/components/result-cards";
@@ -63,7 +48,10 @@ export type Page =
   | "Calendar"
   | "Settings"
   | "Admin Console"
-  | "System Intelligence";
+  | "System Intelligence"
+  | "Menu Manager"
+  | "More";
+
 export interface Workspace {
   session: Session;
   tenant: string;
@@ -102,14 +90,16 @@ export function useRemote<T>(
   }, [path, w.session, w.tenant, w.revision]);
   return { data, error, loading };
 }
+
 export function ErrorBox({ message }: { message: string }) {
   return message ? (
-    <div className="error" role="alert">
+    <div className="error" role="alert" style={{ marginBottom: 14 }}>
       <TriangleAlert size={18} />
       <span>{message}</span>
     </div>
   ) : null;
 }
+
 export function Loading() {
   return (
     <div className="loading" role="status">
@@ -118,17 +108,77 @@ export function Loading() {
     </div>
   );
 }
+
 export function Logo() {
   return (
-    <div className="brand">
-      <span className="brand-mark">
-        <GraduationCap size={22} />
+    <div className="brand" style={{ padding: 0 }}>
+      <div className="logo">C</div>
+      <span>
+        CampusOS <span style={{ color: "var(--ind6)" }}>AI</span>
       </span>
-      <span>CampusOS</span>
-      <small>AI</small>
     </div>
   );
 }
+
+function SvgSprite() {
+  return (
+    <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+      <defs>
+        <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#4338ca" />
+          <stop offset="1" stopColor="#10b981" />
+        </linearGradient>
+        <symbol id="i-home" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z" />
+        </symbol>
+        <symbol id="i-food" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 3v7a3 3 0 003 3v8M7 3v7M10 3v7a3 3 0 01-3 3M17 3c-2 2-3 5-3 8h3v10" />
+        </symbol>
+        <symbol id="i-cal" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="5" width="18" height="16" rx="3" />
+          <path d="M8 3v4M16 3v4M3 10h18" />
+        </symbol>
+        <symbol id="i-ai" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3l2 5 5 2-5 2-2 5-2-5-5-2 5-2zM19 17l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" />
+        </symbol>
+        <symbol id="i-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 16V4M7 9l5-5 5 5M4 20h16" />
+        </symbol>
+        <symbol id="i-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" />
+        </symbol>
+        <symbol id="i-evt" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M15.5 8.5L13.5 13.5 8.5 15.5 10.5 10.5z" />
+        </symbol>
+        <symbol id="i-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="9" cy="8" r="3.5" />
+          <path d="M2.5 20c0-3.5 3-6 6.5-6s6.5 2.5 6.5 6M16 4.5a3.5 3.5 0 010 7M18 14c2 .7 3.5 2.6 3.5 5" />
+        </symbol>
+        <symbol id="i-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1" />
+        </symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
+        </symbol>
+        <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 8l-5 4 5 4M16 8l5 4-5 4M14 5l-4 14" />
+        </symbol>
+        <symbol id="i-dots" viewBox="0 0 24 24" fill="currentColor">
+          <circle cx="5" cy="12" r="1.4" />
+          <circle cx="12" cy="12" r="1.4" />
+          <circle cx="19" cy="12" r="1.4" />
+        </symbol>
+        <symbol id="i-s" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M20 20l-4-4" />
+        </symbol>
+      </defs>
+    </svg>
+  );
+}
+
 const loginSchema = z.object({
   email: z.string().email("Enter a valid email address."),
   password: z.string().min(6, "Use at least six characters."),
@@ -147,6 +197,7 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
   } = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
   });
+
   async function submit(values: z.infer<typeof loginSchema>) {
     setBusy(true);
     setError("");
@@ -212,135 +263,176 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
     setSent(!error);
     setBusy(false);
   }
+
   return (
-    <main className="login-shell">
-      <section className="login-story">
-        <Logo />
+    <div className="login">
+      <div className="lp">
+        <div className="brand" style={{ padding: 0, display: "flex", alignItems: "center", gap: 10, fontWeight: 800, fontSize: 17 }}>
+          <div className="logo">C</div>
+          <span>
+            CampusOS <span style={{ color: "#818cf8" }}>AI</span>
+          </span>
+        </div>
         <div>
           <div className="eyebrow" style={{ color: "#a5b4fc" }}>
-            ONE CAMPUS. ONE CONNECTED EXPERIENCE.
+            One campus. One connected experience.
           </div>
-          <h1>
+          <h2>
             Your campus,
             <br />
             <span>at your fingertips.</span>
-          </h1>
-          <p>
+          </h2>
+          <p style={{ color: "#c7d2fe", maxWidth: 340, lineHeight: 1.6 }}>
             A clearer day starts here. Classes, answers and opportunities,
             together in one place.
           </p>
-          <div className="login-features">
-            <span>
-              <CalendarDays size={15} />
-              Stay on schedule
-            </span>
-            <span>
-              <Sparkles size={15} />
-              Find reliable answers
-            </span>
-            <span>
-              <ShieldCheck size={15} />
-              Your data, protected
-            </span>
-          </div>
         </div>
-        <div className="login-bottom">
+        <div style={{ fontSize: 12, color: "#a5b4fc" }}>
           CampusOS AI · Institutional intelligence, thoughtfully connected.
         </div>
-      </section>
-      <section className="login-form-wrap">
-        <div className="login-form">
-          <div className="eyebrow">YOUR CAMPUS WORKSPACE</div>
-          <h2>Welcome to CampusOS</h2>
-          <p>Sign in with your student or administrative account.</p>
+      </div>
+      <div className="lf">
+        <form onSubmit={handleSubmit(submit)} noValidate>
+          <div className="eyebrow">Your campus workspace</div>
+          <h2 style={{ fontSize: 28, letterSpacing: "-0.02em", margin: "6px 0" }}>
+            Welcome to CampusOS
+          </h2>
+          <p className="mute">Sign in with your student or administrative account.</p>
 
-          <div className="demo-credentials" style={{ margin: "16px 0 20px" }}>
-            <div className="demo-credentials-header">
-              <span>Quick Demo Accounts (1-Click Fill)</span>
+          <div className="card" style={{ padding: 14, marginTop: 16 }}>
+            <div className="mute" style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.06em" }}>
+              QUICK DEMO ACCOUNTS (1-CLICK FILL)
             </div>
-            <div className="demo-pills-row">
-              <button
-                type="button"
-                className="demo-pill student"
-                onClick={() => fillDemo("student@campus.edu.in", "123456")}
-              >
-                <span className="demo-tag student">Student</span>
-                <span className="demo-info">student@campus.edu.in · 123456</span>
-              </button>
-              <button
-                type="button"
-                className="demo-pill admin"
-                onClick={() => fillDemo("admin@campus.edu.in", "CampusAdmin123!")}
-              >
-                <span className="demo-tag admin">Admin</span>
-                <span className="demo-info">admin@campus.edu.in</span>
-              </button>
-            </div>
+            <button
+              type="button"
+              className="demo"
+              onClick={() => fillDemo("student@campus.edu.in", "123456")}
+            >
+              <span className="badge b-stu">STUDENT</span>
+              <span className="mono" style={{ fontSize: 12 }}>
+                student@campus.edu.in · 123456
+              </span>
+            </button>
+            <button
+              type="button"
+              className="demo"
+              onClick={() => fillDemo("admin@campus.edu.in", "123456")}
+            >
+              <span className="badge b-adm">ADMIN</span>
+              <span className="mono" style={{ fontSize: 12 }}>
+                admin@campus.edu.in · 123456
+              </span>
+            </button>
           </div>
 
-          <ErrorBox message={error} />
           {sent && (
-            <div className="success" role="status">
+            <div className="success" role="status" style={{ marginTop: 12 }}>
               Check your inbox for the password reset link.
             </div>
           )}
-          <form onSubmit={handleSubmit(submit)} noValidate>
-            <div>
-              <label htmlFor="email">Institution email</label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="student@campus.edu.in"
-                {...register("email")}
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? "email-error" : undefined}
-              />
-              {errors.email && (
-                <p id="email-error" className="status-warn">
-                  {errors.email.message}
-                </p>
-              )}
-            </div>
-            <div>
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="••••••"
-                {...register("password")}
-                aria-invalid={!!errors.password}
-              />
-              {errors.password && (
-                <p className="status-warn">{errors.password.message}</p>
-              )}
-            </div>
-            <Button type="submit" disabled={busy}>
-              {busy ? <LoaderCircle className="spin" size={17} /> : null}
-              Sign in <ArrowRight size={16} />
-            </Button>
-            {supabase && (
-              <Button
+
+          <label className="lbl" htmlFor="email">
+            Institution email
+          </label>
+          <input
+            className="field"
+            id="email"
+            type="email"
+            autoComplete="username"
+            placeholder="student@campus.edu.in"
+            style={{ width: "100%" }}
+            {...register("email")}
+            aria-invalid={!!errors.email}
+          />
+          {errors.email && (
+            <p className="status-warn" style={{ fontSize: 12, marginTop: 4 }}>
+              {errors.email.message}
+            </p>
+          )}
+
+          <label className="lbl" htmlFor="password">
+            Password
+          </label>
+          <input
+            className="field"
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            placeholder="••••••"
+            style={{ width: "100%" }}
+            {...register("password")}
+            aria-invalid={!!errors.password}
+          />
+          {errors.password && (
+            <p className="status-warn" style={{ fontSize: 12, marginTop: 4 }}>
+              {errors.password.message}
+            </p>
+          )}
+
+          <div
+            role="alert"
+            style={{
+              color: "#e11d48",
+              fontSize: 13,
+              minHeight: 20,
+              margin: "8px 0",
+            }}
+          >
+            {error}
+          </div>
+
+          <button
+            className="btn"
+            type="submit"
+            disabled={busy}
+            style={{ width: "100%", padding: 13 }}
+          >
+            {busy ? <LoaderCircle className="spin" size={16} /> : null}
+            Sign in →
+          </button>
+
+          {supabase && (
+            <p className="mute" style={{ textAlign: "center", margin: "14px 0" }}>
+              <button
                 type="button"
-                variant="ghost"
                 onClick={reset}
                 disabled={busy}
+                style={{ background: "none", border: 0, color: "inherit", textDecoration: "underline" }}
               >
                 Forgot your password?
-              </Button>
-            )}
-          </form>
-          <p className="subtle" style={{ marginTop: 20 }}>
-            Role-Based Access Control is automatically applied: Students see tailored
-            classes, budget canteens, and personal schedules; Admins access the Campus
+              </button>
+            </p>
+          )}
+
+          <p className="mute" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
+            Role-Based Access Control is applied automatically: students see tailored
+            classes, budget canteens and personal schedules; admins access the Campus
             Management console and data ingestion.
           </p>
-        </div>
-      </section>
-    </main>
+        </form>
+      </div>
+    </div>
   );
 }
+
+const CMDS: [string, Page | "@student" | "@admin" | `ask:${string}`, string, "*" | "student" | "admin"][] = [
+  ["Go to Home", "Home", "i-home", "*"],
+  ["Ask CampusOS", "Ask CampusOS", "i-ai", "*"],
+  ["Go to Timetable", "Timetable", "i-cal", "*"],
+  ["Go to Canteen", "Canteen", "i-food", "*"],
+  ["Notices", "Notices", "i-bell", "*"],
+  ["Events", "Events", "i-evt", "*"],
+  ["Faculty", "Faculty", "i-user", "*"],
+  ["Calendar", "Calendar", "i-cal", "*"],
+  ["Settings", "Settings", "i-gear", "*"],
+  ["Operating Systems · LH-204 · 11:30", "Timetable", "i-cal", "student"],
+  ["Paneer Rice Bowl · ₹90", "Canteen", "i-food", "student"],
+  ["Switch to Admin", "@admin", "i-shield", "student"],
+  ["Admin Console", "Admin Console", "i-shield", "admin"],
+  ["System Intelligence", "System Intelligence", "i-code", "admin"],
+  ["Menu Manager", "Menu Manager", "i-food", "admin"],
+  ["Switch to Student", "@student", "i-home", "admin"],
+];
 
 export function CampusApp() {
   const [session, setSession] = useState<Session | null>(null);
@@ -351,11 +443,26 @@ export function CampusApp() {
   const [error, setError] = useState("");
   const [page, setPage] = useState<Page>("Home");
   const [more, setMore] = useState(false);
-  const [mobile, setMobile] = useState(false);
   const [revision, setRevision] = useState(0);
   const [queued, setQueued] = useState("");
+  const [palOpen, setPalOpen] = useState(false);
+  const [palQuery, setPalQuery] = useState("");
+  const [palSel, setPalSel] = useState(0);
+  const [toastMsg, setToastMsg] = useState("");
+  const [isMac, setIsMac] = useState(false);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const palInputRef = useRef<HTMLInputElement>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToastMsg(msg);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToastMsg(""), 2200);
+  }, []);
+
   useEffect(() => {
-    // 1. Check saved institutional session first
+    if (typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform)) {
+      setIsMac(true);
+    }
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("campusos_session");
       if (saved) {
@@ -384,6 +491,7 @@ export function CampusApp() {
     });
     return () => data.subscription.unsubscribe();
   }, []);
+
   useEffect(() => {
     if (!session) {
       setProfile(null);
@@ -417,6 +525,7 @@ export function CampusApp() {
       live = false;
     };
   }, [session]);
+
   useEffect(() => {
     if (!session || !tenant) return;
     let live = true;
@@ -432,11 +541,22 @@ export function CampusApp() {
       live = false;
     };
   }, [session, tenant, revision]);
+
+  const admin = Boolean(
+    profile &&
+      ["department_admin", "institution_admin", "platform_admin"].includes(
+        profile.role,
+      ),
+  );
+
   useEffect(() => {
-    if (mobile)
-      document.querySelector<HTMLButtonElement>(".sidebar nav button")?.focus();
-  }, [mobile]);
+    if (typeof document !== "undefined") {
+      document.body.classList.toggle("admin", admin);
+    }
+  }, [admin]);
+
   const refresh = useCallback(() => setRevision((r) => r + 1), []);
+
   const download = useCallback(
     async (id: string) => {
       if (!session || !tenant) return;
@@ -465,30 +585,151 @@ export function CampusApp() {
     },
     [session, tenant],
   );
+
   async function signOut() {
     if (typeof window !== "undefined") {
       localStorage.removeItem("campusos_session");
+    }
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("admin");
     }
     await supabase?.auth.signOut();
     setSession(null);
     setProfile(null);
     setPage("Home");
   }
-  function navigate(next: Page) {
-    if (!admin && (next === "Admin Console" || next === "System Intelligence")) {
-      setPage("Home");
-    } else {
+
+  const switchPersona = useCallback(
+    async (target: "student" | "admin") => {
+      if ((target === "admin" && admin) || (target === "student" && !admin)) {
+        return;
+      }
+      const email =
+        target === "admin" ? "admin@campus.edu.in" : "student@campus.edu.in";
+      try {
+        const res = await fetch(`${API}/v1/auth/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password: "123456" }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.session) {
+            localStorage.setItem(
+              "campusos_session",
+              JSON.stringify(data.session),
+            );
+            setSession(data.session as unknown as Session);
+            setPage("Home");
+            showToast(
+              `Switched to the ${target === "admin" ? "Admin" : "Student"} version`,
+            );
+          }
+        }
+      } catch {
+        showToast("Could not switch persona right now.");
+      }
+    },
+    [admin, showToast],
+  );
+
+  const navigate = useCallback(
+    (next: Page) => {
+      if (
+        !admin &&
+        (next === "Admin Console" ||
+          next === "System Intelligence" ||
+          next === "Menu Manager")
+      ) {
+        showToast("That page is only available to the admin role");
+        return;
+      }
+      if (["Events", "Faculty", "Calendar", "Settings"].includes(next)) {
+        setMore(true);
+      }
       setPage(next);
-    }
-    setMobile(false);
-    setError("");
-  }
+      setError("");
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0 });
+      }
+    },
+    [admin, showToast],
+  );
+
   function ask(question: string) {
     setQueued(question);
     navigate("Ask CampusOS");
   }
+
+  const filteredCmds = CMDS.filter(
+    (c) =>
+      (c[3] === "*" || c[3] === (admin ? "admin" : "student")) &&
+      c[0].toLowerCase().includes(palQuery.toLowerCase()),
+  );
+
+  const runCmd = useCallback(
+    (cmd?: (typeof CMDS)[number]) => {
+      setPalOpen(false);
+      if (!cmd) return;
+      const target = cmd[1];
+      if (target === "@admin") {
+        void switchPersona("admin");
+      } else if (target === "@student") {
+        void switchPersona("student");
+      } else if (target.startsWith("ask:")) {
+        ask(target.slice(4));
+      } else {
+        navigate(target as Page);
+      }
+    },
+    [navigate, switchPersona],
+  );
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPalOpen((prev) => {
+          const next = !prev;
+          if (next) {
+            setPalQuery("");
+            setPalSel(0);
+            setTimeout(() => palInputRef.current?.focus(), 20);
+          }
+          return next;
+        });
+        return;
+      }
+      if (!palOpen) return;
+      if (e.key === "Escape") {
+        setPalOpen(false);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setPalSel((s) => (s + 1) % Math.max(filteredCmds.length, 1));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setPalSel(
+          (s) =>
+            (s - 1 + Math.max(filteredCmds.length, 1)) %
+            Math.max(filteredCmds.length, 1),
+        );
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        runCmd(filteredCmds[palSel]);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [palOpen, filteredCmds, palSel, runCmd]);
+
   if (authLoading) return <Loading />;
-  if (!session) return <Login onSession={(s) => setSession(s)} />;
+  if (!session)
+    return (
+      <>
+        <SvgSprite />
+        <Login onSession={(s) => setSession(s)} />
+      </>
+    );
   if (
     !profile ||
     profile.tenant_id !== tenant ||
@@ -496,6 +737,7 @@ export function CampusApp() {
   )
     return (
       <main className="content">
+        <SvgSprite />
         <Logo />
         {error ? (
           <>
@@ -512,6 +754,7 @@ export function CampusApp() {
         )}
       </main>
     );
+
   const w: Workspace = {
     session,
     tenant,
@@ -520,232 +763,292 @@ export function CampusApp() {
     refresh,
     revision,
   };
-  const admin = [
-    "department_admin",
-    "institution_admin",
-    "platform_admin",
-  ].includes(profile.role);
-  const primary: [Page, typeof Home][] = [
-    ["Home", Home],
-    ["Ask CampusOS", MessagesSquare],
-    ["Timetable", CalendarDays],
-    ["Canteen", Utensils],
-    ["Notices", FileText],
+
+  const navPrimary: [Page, string, string][] = [
+    ["Home", "Home", "i-home"],
+    ["Ask CampusOS", "Ask CampusOS", "i-ai"],
+    ["Timetable", "Timetable", "i-cal"],
+    ["Canteen", "Canteen", "i-food"],
+    ["Notices", "Notices", "i-bell"],
   ];
-  const secondary: [Page, typeof Home][] = [
-    ["Events", Compass],
-    ["Faculty", Users],
-    ["Calendar", CalendarDays],
-    ["Settings", Settings],
+
+  const navSecondary: [Page, string, string][] = [
+    ["Events", "Events", "i-evt"],
+    ["Faculty", "Faculty", "i-user"],
+    ["Calendar", "Calendar", "i-cal"],
+    ["Settings", "Settings", "i-gear"],
   ];
+
+  const bottomItems: [Page, string, string][] = [
+    ["Home", "Home", "i-home"],
+    ["Ask CampusOS", "Ask", "i-ai"],
+    ["Timetable", "Classes", "i-cal"],
+    ["Canteen", "Food", "i-food"],
+    ["More", "More", "i-dots"],
+  ];
+
   return (
-    <div className="app-shell">
+    <>
+      <SvgSprite />
       <a href="#main" className="skip-link">
         Skip to main content
       </a>
-      <div
-        className={`overlay ${mobile ? "visible" : ""}`}
-        onClick={() => setMobile(false)}
-        aria-hidden="true"
-      />
-      <aside
-        className={`sidebar ${mobile ? "open" : ""}`}
-        aria-label="Campus navigation"
-        onKeyDown={(e) => {
-          if (!mobile) return;
-          if (e.key === "Escape") {
-            setMobile(false);
-            document.querySelector<HTMLButtonElement>(".mobile-menu")?.focus();
-          }
-          if (e.key === "Tab") {
-            const nodes = Array.from(
-              e.currentTarget.querySelectorAll<HTMLElement>(
-                "button,select,a[href]",
-              ),
-            );
-            const first = nodes[0],
-              last = nodes[nodes.length - 1];
-            if (e.shiftKey && document.activeElement === first) {
-              e.preventDefault();
-              last?.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
-              e.preventDefault();
-              first?.focus();
-            }
-          }
-        }}
-      >
-        <Logo />
-        <div className="workspace-label">
-          {admin ? "CAMPUS WORKSPACE" : "STUDENT WORKSPACE"}
-        </div>
-        <nav aria-label="Main navigation">
-          {primary.map(([label, Icon]) => (
+      <div className="app">
+        <aside className="side" aria-label="Campus navigation">
+          <div className="brand">
+            <div className="logo">C</div>
+            <span className="t">
+              CampusOS <span style={{ color: "var(--ind6)" }}>AI</span>
+            </span>
+          </div>
+          <div className="sec-label">
+            {admin ? "CAMPUS WORKSPACE" : "STUDENT WORKSPACE"}
+          </div>
+          {navPrimary.map(([target, label, icon]) => (
             <button
-              key={label}
-              onClick={() => navigate(label)}
-              className={`nav-item ${page === label ? "active" : ""}`}
-              aria-current={page === label ? "page" : undefined}
+              key={target}
+              type="button"
+              className={`nav ${page === target ? "on" : ""}`}
+              onClick={() => navigate(target)}
+              aria-current={page === target ? "page" : undefined}
             >
-              <Icon size={18} />
-              {label}
+              <svg>
+                <use href={`#${icon}`} />
+              </svg>
+              <span className="t">{label}</span>
             </button>
           ))}
           <button
-            className="nav-item"
+            type="button"
+            className="nav"
             onClick={() => setMore(!more)}
             aria-expanded={more}
           >
-            <MoreHorizontal size={18} />
-            More
-            <ChevronDown size={14} style={{ marginLeft: "auto" }} />
+            <svg>
+              <use href="#i-dots" />
+            </svg>
+            <span className="t">More</span>
+            <span className="t" style={{ marginLeft: "auto" }}>
+              ▾
+            </span>
           </button>
-          {more &&
-            secondary.map(([label, Icon]) => (
+          <div className={`sub ${more ? "on" : ""}`}>
+            {navSecondary.map(([target, label, icon]) => (
               <button
-                key={label}
-                onClick={() => navigate(label)}
-                className={`nav-item nav-more ${page === label ? "active" : ""}`}
-                aria-current={page === label ? "page" : undefined}
+                key={target}
+                type="button"
+                className={`nav ${page === target ? "on" : ""}`}
+                onClick={() => navigate(target)}
+                aria-current={page === target ? "page" : undefined}
               >
-                <Icon size={16} />
-                {label}
+                <svg>
+                  <use href={`#${icon}`} />
+                </svg>
+                <span className="t">{label}</span>
               </button>
             ))}
+          </div>
+
           {admin && (
             <>
-              <div className="workspace-label" style={{ marginTop: 25 }}>
-                MANAGE CAMPUS
-              </div>
+              <div className="sec-label">MANAGE CAMPUS</div>
               <button
-                className={`nav-item ${page === "Admin Console" ? "active" : ""}`}
+                type="button"
+                className={`nav ${page === "Admin Console" ? "on" : ""}`}
                 onClick={() => navigate("Admin Console")}
               >
-                <ShieldCheck size={17} />
-                Admin Console
+                <svg>
+                  <use href="#i-shield" />
+                </svg>
+                <span className="t">Admin Console</span>
               </button>
               <button
-                className={`nav-item ${page === "System Intelligence" ? "active" : ""}`}
+                type="button"
+                className={`nav ${page === "System Intelligence" ? "on" : ""}`}
                 onClick={() => navigate("System Intelligence")}
               >
-                <Code2 size={17} />
-                System Intelligence
+                <svg>
+                  <use href="#i-code" />
+                </svg>
+                <span className="t">System Intelligence</span>
+              </button>
+              <button
+                type="button"
+                className={`nav ${page === "Menu Manager" ? "on" : ""}`}
+                onClick={() => navigate("Menu Manager")}
+              >
+                <svg>
+                  <use href="#i-food" />
+                </svg>
+                <span className="t">Menu Manager</span>
               </button>
             </>
           )}
-        </nav>
-        <div className="sidebar-bottom">
-          <div className="local-status">
-            <strong>
-              <span className="status-dot" />
-              Your campus, connected
-            </strong>
-            <p>Answers grounded in your sources.</p>
-          </div>
-          <div className="sidebar-person">
-            <div className="avatar">{profile.name[0]}</div>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <strong style={{ fontSize: 13 }}>{profile.name}</strong>
-                <span className={`role-badge ${admin ? "admin" : "student"}`}>
-                  {admin ? "Admin" : "Student"}
+
+          <div
+            className="card mute t"
+            style={{ marginTop: "auto", flex: "none", padding: 12 }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div className="av">{profile.name[0]}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 13,
+                    color: "var(--ink)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {profile.name}
+                </div>
+                <span
+                  className={`badge ${admin ? "b-adm" : "b-stu"}`}
+                  style={{ fontSize: 10, padding: "1px 8px" }}
+                >
+                  {admin ? "ADMIN" : "STUDENT"}
                 </span>
+                <div className="mono mute" style={{ fontSize: 10 }}>
+                  {admin
+                    ? "Administration"
+                    : `${profile.department} · Sem ${profile.semester} · ${profile.section}`}
+                </div>
               </div>
-              <p>
-                {profile.department} · Sem {profile.semester} · {profile.section}
-              </p>
+              <button
+                type="button"
+                className="so"
+                onClick={signOut}
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                ⎋
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <main id="main" className="main" tabIndex={-1}>
+          <header className="top">
+            <div className="crumb">
+              <span>Workspace</span>
+              <span>›</span>
+              <b>{page}</b>
             </div>
             <button
-              aria-label="Sign out"
-              onClick={signOut}
-              title="Sign out"
-              style={{
-                marginLeft: "auto",
-                background: "none",
-                border: 0,
-                color: "#64748b",
-                minWidth: 36,
-                minHeight: 44,
-                cursor: "pointer",
+              type="button"
+              className="search"
+              onClick={() => {
+                setPalOpen(true);
+                setPalQuery("");
+                setPalSel(0);
+                setTimeout(() => palInputRef.current?.focus(), 20);
               }}
+              aria-label="Open command bar"
             >
-              <LogOut size={16} />
+              <svg width="16" height="16">
+                <use href="#i-s" />
+              </svg>
+              <span>
+                {admin
+                  ? "Search documents, menu items, reviews…"
+                  : "Search classes, food, documents…"}
+              </span>
+              <span className="kbd">{isMac ? "⌘ K" : "Ctrl K"}</span>
             </button>
-          </div>
-        </div>
-      </aside>
-      <div className="main-area">
-        <header className="topbar">
-          <button
-            className="mobile-menu"
-            aria-label={mobile ? "Close navigation" : "Open navigation"}
-            aria-expanded={mobile}
-            onClick={() => setMobile(!mobile)}
-          >
-            {mobile ? <X size={22} /> : <Menu size={22} />}
-          </button>
-          <div className="breadcrumb">
-            <GraduationCap size={15} />
-            Workspace
-            <ChevronRight size={12} />
-            <strong style={{ color: "#334155" }}>{page}</strong>
-          </div>
-          <div className="top-right">
-            <label className="sr-only" htmlFor="institution">
-              Institution
-            </label>
-            <select
-              id="institution"
-              className="institution-select"
-              value={tenant}
-              onChange={(e) => {
-                setTenant(e.target.value);
-                localStorage.setItem("campusos-tenant", e.target.value);
-                setPage("Home");
-              }}
+            <div
+              className={`persona ${admin ? "admin" : ""}`}
+              role="group"
+              aria-label="Switch persona"
             >
-              {members.map((m) => (
-                <option key={m.tenant_id} value={m.tenant_id}>
-                  {m.institution}
-                  {m.demo ? " · Demo Data" : ""}
-                </option>
-              ))}
-            </select>
-            <div className="avatar" aria-hidden="true">
+              <span className="pill" />
+              <button
+                type="button"
+                className={!admin ? "on" : ""}
+                onClick={() => switchPersona("student")}
+              >
+                Student
+              </button>
+              <button
+                type="button"
+                className={admin ? "on" : ""}
+                onClick={() => switchPersona("admin")}
+              >
+                Admin
+              </button>
+            </div>
+            {members.length > 1 ? (
+              <select
+                aria-label="Institution"
+                className="institution-select mute tenant"
+                value={tenant}
+                onChange={(e) => {
+                  setTenant(e.target.value);
+                  localStorage.setItem("campusos-tenant", e.target.value);
+                  setPage("Home");
+                }}
+              >
+                {members.map((m) => (
+                  <option key={m.tenant_id} value={m.tenant_id}>
+                    {m.institution}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="mute tenant">
+                {members[0]?.institution || "RVCE Campus Intelligence"}
+              </span>
+            )}
+            <div className="av" aria-hidden="true">
               {profile.name[0]}
             </div>
-          </div>
-        </header>
-        <main id="main" className="content" tabIndex={-1}>
-          <ErrorBox message={error} />
-          {page === "Home" ? (
-            <HomeView w={w} ask={ask} navigate={navigate} />
-          ) : page === "Ask CampusOS" ? (
-            <ChatView
-              key={tenant}
-              w={w}
-              queued={queued}
-              consumed={() => setQueued("")}
-            />
-          ) : page === "Admin Console" || page === "System Intelligence" ? (
-            admin ? (
-              <AdminView w={w} developer={page === "System Intelligence"} />
+          </header>
+
+          <div className="view-anim" key={page}>
+            <ErrorBox message={error} />
+            {page === "Home" ? (
+              <HomeView
+                w={w}
+                ask={ask}
+                navigate={navigate}
+                showToast={showToast}
+                institution={members[0]?.institution || "RV College of Engineering"}
+              />
+            ) : page === "Ask CampusOS" ? (
+              <ChatView
+                key={tenant}
+                w={w}
+                queued={queued}
+                consumed={() => setQueued("")}
+              />
+            ) : page === "Admin Console" || page === "System Intelligence" ? (
+              admin ? (
+                <AdminView w={w} developer={page === "System Intelligence"} />
+              ) : (
+                <div className="card" style={{ textAlign: "center", padding: "48px 24px" }}>
+                  <ShieldCheck size={40} color="#ef4444" style={{ margin: "0 auto 16px" }} />
+                  <h2 style={{ fontSize: 20 }}>Administrative Access Restricted</h2>
+                  <p className="mute" style={{ maxWidth: 460, margin: "12px auto 24px", lineHeight: 1.6 }}>
+                    You are currently logged in as a student (<strong>{profile.name}</strong>).
+                    Campus administration, vision data ingestion, and system controls are restricted to authorized administrators.
+                  </p>
+                  <button className="btn" onClick={() => setPage("Home")}>
+                    Return to Student Portal
+                  </button>
+                </div>
+              )
+            ) : page === "Menu Manager" ? (
+              <MenuManagerView showToast={showToast} navigate={navigate} />
+            ) : page === "Settings" ? (
+              <SettingsView w={w} />
+            ) : page === "More" ? (
+              <MoreView admin={admin} navigate={navigate} />
             ) : (
-              <div className="panel" style={{ textAlign: "center", padding: "48px 24px" }}>
-                <ShieldCheck size={40} color="#ef4444" style={{ margin: "0 auto 16px" }} />
-                <h2 style={{ fontSize: 20 }}>Administrative Access Restricted</h2>
-                <p className="subtle" style={{ maxWidth: 460, margin: "12px auto 24px", lineHeight: 1.6 }}>
-                  You are currently logged in as a student (<strong>{profile.name}</strong>).
-                  Campus administration, vision data ingestion, and system controls are restricted to authorized administrators.
-                </p>
-                <Button onClick={() => setPage("Home")}>Return to Student Portal</Button>
-              </div>
-            )
-          ) : page === "Settings" ? (
-            <SettingsView w={w} />
-          ) : (
-            <BrowseView key={`${tenant}:${page}`} w={w} page={page} />
-          )}
+              <BrowseView key={`${tenant}:${page}`} w={w} page={page} />
+            )}
+          </div>
+
           <footer className="page-footer">
             <span>CampusOS AI · Your campus, thoughtfully connected.</span>
             <span>
@@ -757,7 +1060,65 @@ export function CampusApp() {
           </footer>
         </main>
       </div>
-    </div>
+
+      <nav className="bottom" aria-label="Mobile navigation">
+        {bottomItems.map(([target, label, icon]) => (
+          <button
+            key={target}
+            type="button"
+            className={`nav ${page === target ? "on" : ""}`}
+            onClick={() => navigate(target)}
+          >
+            <svg width="20" height="20">
+              <use href={`#${icon}`} />
+            </svg>
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      <div
+        className={`ov ${palOpen ? "on" : ""}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) setPalOpen(false);
+        }}
+      >
+        <div className="pal" role="dialog" aria-label="Command bar">
+          <input
+            ref={palInputRef}
+            value={palQuery}
+            onChange={(e) => {
+              setPalQuery(e.target.value);
+              setPalSel(0);
+            }}
+            placeholder="Type a command or search…"
+            autoComplete="off"
+          />
+          <ul>
+            {filteredCmds.length ? (
+              filteredCmds.map((c, i) => (
+                <li
+                  key={c[0]}
+                  className={i === palSel ? "on" : ""}
+                  onClick={() => runCmd(c)}
+                >
+                  <svg width="18" height="18">
+                    <use href={`#${c[2]}`} />
+                  </svg>
+                  {c[0]}
+                </li>
+              ))
+            ) : (
+              <li className="mute">No matches. Try “canteen” or “timetable”.</li>
+            )}
+          </ul>
+        </div>
+      </div>
+
+      <div className={`toast ${toastMsg ? "on" : ""}`} role="status" aria-live="polite">
+        {toastMsg}
+      </div>
+    </>
   );
 }
 
@@ -767,14 +1128,18 @@ const quick = [
   { label: "Latest notices", icon: FileText },
   { label: "Events this week", icon: Compass },
 ];
+
 export function QuickActions({ ask }: { ask: (q: string) => void }) {
   return (
-    <div className="quick-actions">
-      {quick.map(({ label, icon: Icon }) => (
-        <button className="quick-action" onClick={() => ask(label)} key={label}>
-          <Icon size={13} />
+    <div className="chips" style={{ padding: "12px 0 6px" }}>
+      {quick.map(({ label }) => (
+        <button
+          type="button"
+          className="chip"
+          onClick={() => ask(label)}
+          key={label}
+        >
           {label}
-          <ArrowUpRight size={11} />
         </button>
       ))}
     </div>
@@ -785,82 +1150,434 @@ function HomeView({
   w,
   ask,
   navigate,
+  showToast,
+  institution,
 }: {
   w: Workspace;
   ask: (q: string) => void;
   navigate: (p: Page) => void;
+  showToast: (msg: string) => void;
+  institution: string;
 }) {
   const { data, error, loading } = useRemote<Overview>("/v1/overview", w);
   const [question, setQuestion] = useState("");
-  const today = campusDate(w.profile.timezone);
+  const [checkedIn, setCheckedIn] = useState(false);
+  const [ringOffset, setRingOffset] = useState(389.6);
+  const [mins, setMins] = useState(24);
+  const [reviews, setReviews] = useState([
+    ["menu-nov-w2.jpg", "Canteen menu · Nov week 2", 96],
+    ["circular-117.pdf", "Circular · Mid-sem exam schedule", 88],
+    ["cse-s3b-timetable.pdf", "Timetable · CSE Sem 3 Sec B", 74],
+  ] as [string, string, number][]);
+
+  const isAdmin = [
+    "department_admin",
+    "institution_admin",
+    "platform_admin",
+  ].includes(w.profile.role);
+
+  useEffect(() => {
+    const att = isAdmin ? 91.2 : 89.4;
+    const c = 389.6;
+    const timer = setTimeout(() => {
+      setRingOffset(c - (c * att) / 100);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [isAdmin]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setMins((m) => (m > 1 ? m - 1 : 1));
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const firstName = w.profile.name.split(" ")[0] || "Alex";
+  const nextClass = data?.next_class;
+  const classCount = data?.classes?.length ?? 4;
+
   return (
     <>
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">
-            {w.profile.role === "student"
-              ? "STUDENT PORTAL · ACADEMIC LIFE & SERVICES"
-              : "CAMPUS INTELLIGENCE · ADMINISTRATIVE CONSOLE"}
+      {isAdmin ? (
+        <div className="bento" style={{ marginBottom: 22 }}>
+          <div className="card hero">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span className="dot" />
+              <span className="mute mono" style={{ fontSize: 12 }}>
+                Admin console · {institution}
+              </span>
+            </div>
+            <h1 className="h1">Welcome back, {w.profile.name}</h1>
+            <p className="mute" style={{ margin: "10px 0 18px", fontSize: 15 }}>
+              3 documents processed today. <span>{reviews.length}</span> items need your review.
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
+              <span className="badge b-adm">Admin · {w.session.user.email || "admin@campus.edu.in"}</span>
+              <button
+                type="button"
+                className="btn ghost sm"
+                onClick={() => navigate("Admin Console")}
+              >
+                Upload a document
+              </button>
+            </div>
           </div>
-          <h1>
-            Good to see you, {w.profile.name.split(" ")[0]}{" "}
-            <span aria-hidden="true">☀</span>
-          </h1>
-          <p>
-            {w.profile.role === "student"
-              ? `Your schedule, mess updates, and campus resources for ${w.profile.department} Semester ${w.profile.semester}.`
-              : "Let’s make the most of your campus day."}
-          </p>
+
+          <div className="card" style={{ gridColumn: "span 12" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+              <div className="logo" style={{ width: 40, height: 40 }}>
+                <svg width="20" height="20">
+                  <use href="#i-ai" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="h3" style={{ fontSize: 18 }}>
+                  A question away from a clearer day.
+                </h3>
+                <div className="mute">
+                  Query campus-wide schedules, circulars, menu items, and ingested records.
+                </div>
+              </div>
+            </div>
+            <form
+              className="inp"
+              style={{ padding: 0, border: 0 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (question.trim()) ask(question.trim());
+              }}
+            >
+              <input
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask anything about your campus…"
+                autoComplete="off"
+              />
+              <button className="btn" type="submit">
+                Ask CampusOS ↗
+              </button>
+            </form>
+            <QuickActions ask={ask} />
+          </div>
+
+          <div className="card k">
+            <div className="mute">Documents ingested</div>
+            <div className="kv">128</div>
+            <span className="badge b-adm">+3 today</span>
+          </div>
+          <div className="card k">
+            <div className="mute">Canteen orders today</div>
+            <div className="kv">1,942</div>
+            <span className="badge b-adm">+12% vs last Monday</span>
+          </div>
+          <div className="card k">
+            <div className="mute">Active students</div>
+            <div className="kv">4,310</div>
+            <span className="badge b-adm">96% of roll</span>
+          </div>
+          <div className="card k">
+            <div className="mute">Campus attendance · target 85%</div>
+            <div className="kv">91.2%</div>
+            <div className="bar">
+              <i style={{ width: "91.2%", background: "linear-gradient(90deg,#047857,#10b981)" }} />
+            </div>
+          </div>
+
+          <div className="card rev">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h3 className="h3">Needs review</h3>
+              <span className="badge b-adm">{reviews.length} pending</span>
+            </div>
+            <div>
+              {reviews.length ? (
+                reviews.map((r, i) => (
+                  <div className="rv" key={r[0]}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14 }}>{r[1]}</div>
+                      <div className="mono mute" style={{ fontSize: 11 }}>
+                        {r[0]} · {r[2]}% confidence
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn sm"
+                      onClick={() => {
+                        showToast(`Published ${r[0]}`);
+                        setReviews((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={() => {
+                        showToast(`Dismissed ${r[0]}`);
+                        setReviews((prev) => prev.filter((_, idx) => idx !== i));
+                      }}
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="mute" style={{ padding: "16px 0" }}>
+                  All caught up. New uploads will appear here.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="card hrs">
+            <h3 className="h3">Canteen orders by hour</h3>
+            <div className="hbars">
+              {(
+                [
+                  ["8", 18],
+                  ["9", 34],
+                  ["10", 52],
+                  ["11", 70],
+                  ["12", 92],
+                  ["1", 100],
+                  ["2", 64],
+                  ["3", 30],
+                ] as [string, number][]
+              ).map(([h, pct]) => (
+                <div key={h}>
+                  <i style={{ height: `${pct * 0.78}%` }} />
+                  <span className="mono mute">{h}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mute" style={{ marginTop: 8 }}>
+              Peak: 1 PM, about 38% of daily orders.
+            </div>
+          </div>
         </div>
-        <div className="date-label">{prettyDate(today)}</div>
-      </div>
-      {w.profile.demo && (
-        <div className="demo-banner">
-          <ShieldCheck size={15} />
-          <span>
-            You’re exploring a synthetic campus. All sample records are clearly
-            marked <strong>Demo Data</strong>.
-          </span>
+      ) : (
+        <div className="bento" style={{ marginBottom: 22 }}>
+          <div className="card hero">
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span className="dot" />
+              <span className="mute mono" style={{ fontSize: 12 }}>
+                Connected · {institution}
+              </span>
+            </div>
+            <h1 className="h1">Welcome back, {firstName}</h1>
+            <p className="mute" style={{ margin: "10px 0 18px", fontSize: 15 }}>
+              You have {classCount} classes today. Lunch opens at 12:30.
+            </p>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", position: "relative", zIndex: 1 }}>
+              <span className="badge b-stu">Student · {w.session.user.email || "student@campus.edu.in"}</span>
+              <span
+                className="badge"
+                style={{
+                  background: "rgba(255,255,255,.12)",
+                  color: "#fff",
+                  borderColor: "rgba(255,255,255,.3)",
+                }}
+              >
+                {w.profile.name} · {w.profile.department} Sem {w.profile.semester} Sec {w.profile.section}
+              </span>
+            </div>
+          </div>
+
+          <div className="card" style={{ gridColumn: "span 12" }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+              <div className="logo" style={{ width: 40, height: 40 }}>
+                <svg width="20" height="20">
+                  <use href="#i-ai" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="h3" style={{ fontSize: 18 }}>
+                  A question away from a clearer day.
+                </h3>
+                <div className="mute">
+                  Your classes, campus updates, and everything in between.
+                </div>
+              </div>
+            </div>
+            <form
+              className="inp"
+              style={{ padding: 0, border: 0 }}
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (question.trim()) ask(question.trim());
+              }}
+            >
+              <input
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask anything about your campus…"
+                autoComplete="off"
+              />
+              <button className="btn" type="submit">
+                Ask CampusOS ↗
+              </button>
+            </form>
+            <QuickActions ask={ask} />
+            <div className="mute" style={{ fontSize: 12 }}>
+              Grounded in your institution’s data. Every answer comes with a source.
+            </div>
+          </div>
+
+          <div className="card next">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <span className="badge b-adm">
+                <span className="dot" />
+                UP NEXT
+              </span>
+              <span className="mono mute">In {mins} Minutes</span>
+            </div>
+            <h2 className="h1" style={{ fontSize: 26 }}>
+              {nextClass ? text(nextClass.subject) : "Operating Systems"}
+            </h2>
+            <div
+              style={{ display: "flex", gap: 18, flexWrap: "wrap", margin: "12px 0 18px" }}
+              className="mute"
+            >
+              <span>
+                📍{" "}
+                <b style={{ color: "var(--ink)" }}>
+                  {nextClass ? text(nextClass.room) : "LH-204, Block B"}
+                </b>
+              </span>
+              <span>
+                👤 Faculty{" "}
+                <b className="mono" style={{ color: "var(--ink)" }}>
+                  {nextClass
+                    ? text(nextClass.faculty_code || nextClass.faculty)
+                    : "SRK"}
+                </b>
+              </span>
+              <span>
+                🕐{" "}
+                {nextClass
+                  ? `${text(nextClass.start_time).slice(0, 5)} – ${text(nextClass.end_time).slice(0, 5)}`
+                  : "11:30 – 12:30"}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className="btn"
+                style={
+                  checkedIn
+                    ? { background: "linear-gradient(135deg,#047857,#10b981)" }
+                    : undefined
+                }
+                onClick={() => {
+                  setCheckedIn(true);
+                  showToast(
+                    `Attendance marked for ${nextClass ? text(nextClass.subject) : "Operating Systems"}`,
+                  );
+                }}
+              >
+                {checkedIn ? "✓ Marked present" : "Mark attendance"}
+              </button>
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={() => navigate("Timetable")}
+              >
+                Full timetable
+              </button>
+            </div>
+          </div>
+
+          <div className="card ring" style={{ textAlign: "center" }}>
+            <h3 className="h3" style={{ textAlign: "left" }}>
+              Attendance · target 75%
+            </h3>
+            <div style={{ position: "relative", width: 150, height: 150, margin: "14px auto 8px" }}>
+              <svg className="ringsvg" viewBox="0 0 150 150">
+                <circle className="bg" cx="75" cy="75" r="62" />
+                <circle
+                  className="fg"
+                  cx="75"
+                  cy="75"
+                  r="62"
+                  strokeDasharray="389.6"
+                  strokeDashoffset={ringOffset}
+                />
+              </svg>
+              <div style={{ position: "absolute", inset: 0, display: "grid", placeContent: "center" }}>
+                <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: "-0.03em" }}>
+                  89.4%
+                </div>
+                <div className="mute">safe margin</div>
+              </div>
+            </div>
+            <span className="badge b-adm">Safe · +14.4% above target</span>
+          </div>
+
+          <div className="card pick">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span className="badge b-stu">Lunch pick · under ₹100</span>
+              <span className="veg" title="Vegetarian" />
+            </div>
+            <h2 className="h1" style={{ fontSize: 24, margin: "12px 0 4px" }}>
+              Paneer Rice Bowl
+            </h2>
+            <div className="mute">Open till 3:00 PM at Main Canteen</div>
+            <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", margin: "16px 0 8px" }}>
+              <span className="price" style={{ fontSize: 28 }}>
+                ₹90
+              </span>
+              <span className="mono mute">24g protein · 540 kcal</span>
+            </div>
+            <div className="bar">
+              <i style={{ width: "30%", background: "#4338ca" }} title="Protein" />
+              <i style={{ width: "52%", background: "#818cf8" }} title="Carbs" />
+              <i style={{ width: "18%", background: "#c7d2fe" }} title="Fat" />
+            </div>
+            <div className="mute" style={{ marginTop: 8, display: "flex", gap: 14, justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 14 }}>
+                <span>● Protein 30%</span>
+                <span style={{ color: "#818cf8" }}>● Carbs 52%</span>
+                <span style={{ color: "#a5b4fc" }}>● Fat 18%</span>
+              </div>
+              <button
+                type="button"
+                className="text-link"
+                onClick={() => navigate("Canteen")}
+              >
+                Canteen <ArrowRight size={12} />
+              </button>
+            </div>
+          </div>
+
+          <div className="card stat">
+            <h3 className="h3">This week</h3>
+            <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+              {(
+                [
+                  ["Classes attended", "17 / 19", 89],
+                  ["Canteen spend", "₹410", 41],
+                  ["Assignments due", "2", 20],
+                ] as [string, string, number][]
+              ).map(([label, val, pct]) => (
+                <div key={label}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 600 }}>
+                    <span>{label}</span>
+                    <span className="mono">{val}</span>
+                  </div>
+                  <div className="bar" style={{ marginTop: 6 }}>
+                    <i
+                      style={{
+                        width: `${pct}%`,
+                        background: "linear-gradient(90deg,#4338ca,#4f46e5)",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
-      <section className="hero" aria-label="Ask CampusOS">
-        <div className="hero-heading">
-          <span className="spark-icon">
-            <Sparkles size={22} />
-          </span>
-          <div>
-            <h2>A question away from a clearer day.</h2>
-            <p>Your classes, campus updates, and everything in between.</p>
-          </div>
-        </div>
-        <form
-          className="ask-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (question.trim()) ask(question.trim());
-          }}
-        >
-          <label className="sr-only" htmlFor="home-question">
-            Ask anything about your campus
-          </label>
-          <input
-            id="home-question"
-            placeholder="Ask anything about your campus..."
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            maxLength={2000}
-          />
-          <Button type="submit" aria-label="Ask CampusOS">
-            <span className="ask-label">Ask CampusOS</span>
-            <ArrowUpRight size={18} />
-          </Button>
-        </form>
-        <QuickActions ask={ask} />
-        <div className="hero-footnote">
-          <ShieldCheck size={12} />
-          Grounded in your institution’s data. Every answer comes with a source.
-        </div>
-      </section>
+
       <div className="section-header">
         <div>
           <h2>Your day, at a glance</h2>
@@ -883,56 +1600,6 @@ function HomeView({
         data && (
           <div className="dashboard-grid">
             <div>
-              <section className="panel next-panel">
-                <div className="next-label">
-                  <Clock3 size={14} />
-                  UP NEXT
-                </div>
-                {data.next_class ? (
-                  <>
-                    <h3>{text(data.next_class.subject)}</h3>
-                    <div className="next-info">
-                      <span>
-                        <Clock3 size={14} />
-                        {text(data.next_class.start_time).slice(0, 5)} –{" "}
-                        {text(data.next_class.end_time).slice(0, 5)}
-                      </span>
-                      <span>
-                        <MapPin size={14} />
-                        {text(data.next_class.room)}
-                      </span>
-                      <span>{prettyDate(data.next_class.date)}</span>
-                    </div>
-                    <div className="next-professor">
-                      With{" "}
-                      {text(
-                        data.next_class.faculty || data.next_class.faculty_code,
-                      )}
-                    </div>
-                    <div className="next-bottom">
-                      {data.next_class.demo ? <DemoBadge /> : <span />}
-                      <button onClick={() => navigate("Timetable")}>
-                        View timetable{" "}
-                        <ArrowUpRight size={12} style={{ display: "inline" }} />
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <h3>You’re all caught up.</h3>
-                    <p>
-                      No upcoming class is listed. Check your timetable for
-                      another date.
-                    </p>
-                    <Button
-                      variant="ghost"
-                      onClick={() => navigate("Timetable")}
-                    >
-                      Open timetable
-                    </Button>
-                  </>
-                )}
-              </section>
               <section className="panel">
                 <div className="panel-heading">
                   <h2>
@@ -1057,5 +1724,240 @@ function HomeView({
         )
       )}
     </>
+  );
+}
+
+const INITIAL_FOOD: [string, number, boolean, number, string, boolean][] = [
+  ["Masala Dosa", 45, true, 8, "South Indian", true],
+  ["Idli Vada (2+1)", 35, true, 9, "South Indian", true],
+  ["Veg Fried Rice", 70, true, 11, "Chinese", true],
+  ["Paneer Rice Bowl", 90, true, 24, "Bowls", true],
+  ["Chole Bhature", 60, true, 16, "North Indian", true],
+  ["Egg Roll", 50, false, 14, "Rolls", true],
+  ["Chicken Biryani", 120, false, 32, "Biryani", true],
+  ["Veg Thali", 85, true, 18, "Meals", true],
+  ["Chicken Noodles", 95, false, 22, "Chinese", true],
+  ["Sprouts Salad", 30, true, 12, "Healthy", true],
+  ["Filter Coffee", 20, true, 3, "Beverages", true],
+];
+
+function MenuManagerView({
+  showToast,
+  navigate,
+}: {
+  showToast: (msg: string) => void;
+  navigate: (p: Page) => void;
+}) {
+  const [items, setItems] = useState(INITIAL_FOOD);
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [protein, setProtein] = useState("");
+  const [isVeg, setIsVeg] = useState(true);
+
+  return (
+    <section>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
+        <div>
+          <h1 className="h1" style={{ marginBottom: 6 }}>
+            Menu Manager
+          </h1>
+          <p className="mute" style={{ margin: 0 }}>
+            Price and availability changes show up in the student canteen right away.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn ghost sm"
+          onClick={() => navigate("Admin Console")}
+        >
+          Import menu PDF/CSV →
+        </button>
+      </div>
+
+      <form
+        className="card addf"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!name.trim() || !price) return;
+          setItems((prev) => [
+            [name.trim(), Number(price), isVeg, Number(protein) || 0, "Special", true],
+            ...prev,
+          ]);
+          setName("");
+          setPrice("");
+          setProtein("");
+          showToast("Added to the student canteen");
+        }}
+      >
+        <input
+          className="field"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Dish name"
+          required
+        />
+        <input
+          className="field"
+          type="number"
+          min="10"
+          max="500"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+          placeholder="Price in ₹"
+          required
+          style={{ maxWidth: 130 }}
+        />
+        <input
+          className="field"
+          type="number"
+          min="0"
+          max="80"
+          value={protein}
+          onChange={(e) => setProtein(e.target.value)}
+          placeholder="Protein (g)"
+          style={{ maxWidth: 130 }}
+        />
+        <div className="switch">
+          <button
+            type="button"
+            className={isVeg ? "on" : ""}
+            onClick={() => setIsVeg(true)}
+          >
+            Veg
+          </button>
+          <button
+            type="button"
+            className={!isVeg ? "on" : ""}
+            onClick={() => setIsVeg(false)}
+          >
+            Non-veg
+          </button>
+        </div>
+        <button className="btn" type="submit">
+          Add dish
+        </button>
+      </form>
+
+      <div>
+        {items.map((f, i) => (
+          <div className={`mrow ${!f[5] ? "off" : ""}`} key={`${f[0]}-${i}`}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+              <span className={f[2] ? "veg" : "nv"} />
+              <div>
+                <div style={{ fontWeight: 700 }}>{f[0]}</div>
+                <div className="mute">
+                  {f[4]} · {f[3]}g protein
+                </div>
+              </div>
+            </div>
+            <div className="stepper">
+              <button
+                type="button"
+                aria-label="Lower price"
+                onClick={() =>
+                  setItems((prev) =>
+                    prev.map((row, idx) =>
+                      idx === i ? [row[0], Math.max(10, row[1] - 5), row[2], row[3], row[4], row[5]] : row,
+                    ),
+                  )
+                }
+              >
+                −
+              </button>
+              <span className="mono" style={{ minWidth: 52, textAlign: "center" }}>
+                ₹{f[1]}
+              </span>
+              <button
+                type="button"
+                aria-label="Raise price"
+                onClick={() =>
+                  setItems((prev) =>
+                    prev.map((row, idx) =>
+                      idx === i ? [row[0], row[1] + 5, row[2], row[3], row[4], row[5]] : row,
+                    ),
+                  )
+                }
+              >
+                +
+              </button>
+            </div>
+            <button
+              type="button"
+              className={`tog ${f[5] ? "on" : ""}`}
+              aria-label="Toggle availability"
+              title={f[5] ? "Available" : "Sold out"}
+              onClick={() => {
+                const nextAvail = !f[5];
+                setItems((prev) =>
+                  prev.map((row, idx) =>
+                    idx === i ? [row[0], row[1], row[2], row[3], row[4], nextAvail] : row,
+                  ),
+                );
+                showToast(
+                  `${f[0]}${nextAvail ? " is available again" : " marked sold out"}`,
+                );
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MoreView({
+  admin,
+  navigate,
+}: {
+  admin: boolean;
+  navigate: (p: Page) => void;
+}) {
+  const links: [Page, string, string][] = [
+    ["Notices", "i-bell", "Notices"],
+    ["Events", "i-evt", "Events"],
+    ["Faculty", "i-user", "Faculty"],
+    ["Calendar", "i-cal", "Calendar"],
+    ["Settings", "i-gear", "Settings"],
+  ];
+  if (admin) {
+    links.push(
+      ["Admin Console", "i-shield", "Admin Console"],
+      ["System Intelligence", "i-code", "System Intelligence"],
+      ["Menu Manager", "i-food", "Menu Manager"],
+    );
+  }
+  return (
+    <section>
+      <div className="eyebrow">Your workspace</div>
+      <h1 className="h1" style={{ margin: "4px 0 6px" }}>
+        More
+      </h1>
+      <p className="mute" style={{ margin: "0 0 18px" }}>
+        Everything else in CampusOS.
+      </p>
+      <div className="bento-grid">
+        {links.map(([target, icon, label]) => (
+          <button
+            key={target}
+            type="button"
+            className="card"
+            onClick={() => navigate(target)}
+            style={{
+              textAlign: "left",
+              display: "flex",
+              gap: 12,
+              alignItems: "center",
+              fontWeight: 700,
+              color: "inherit",
+            }}
+          >
+            <svg width="20" height="20">
+              <use href={`#${icon}`} />
+            </svg>
+            {label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
