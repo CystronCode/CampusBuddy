@@ -8,8 +8,13 @@ import {
   ErrorBox,
   Loading,
 } from "@/components/campus-app";
-import { type DataRecord, campusDate, prettyDate } from "@/lib/api";
-import { RecordList, Empty, RecordCard } from "@/components/result-cards";
+import { api, type DataRecord, campusDate, prettyDate } from "@/lib/api";
+import {
+  RecordList,
+  Empty,
+  RecordCard,
+  TimetableTable,
+} from "@/components/result-cards";
 import { Button } from "@/components/ui/button";
 
 const descriptions: Partial<Record<Page, string>> = {
@@ -21,6 +26,16 @@ const descriptions: Partial<Record<Page, string>> = {
   Calendar: "A little more room for everything you do.",
 };
 
+const TIMETABLE_DAYS = [
+  { id: "all", label: "All Days (Grid)" },
+  { id: "monday", label: "Monday" },
+  { id: "tuesday", label: "Tuesday" },
+  { id: "wednesday", label: "Wednesday" },
+  { id: "thursday", label: "Thursday" },
+  { id: "friday", label: "Friday" },
+  { id: "saturday", label: "Saturday" },
+];
+
 export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
   const [date, setDate] = useState(campusDate(w.profile.timezone));
   const [query, setQuery] = useState("");
@@ -29,14 +44,21 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
     w.profile.diet === "vegetarian" ? "true" : "any",
   );
   const [sort, setSort] = useState("price");
-  const [tab, setTab] = useState("day");
+  const [tab, setTab] = useState("all");
   const [archive, setArchive] = useState(false);
+  const [editError, setEditError] = useState("");
+  const isAdmin = [
+    "institution_admin",
+    "department_admin",
+    "platform_admin",
+  ].includes(w.profile.role);
+
   let path = "/v1/notices";
   let kind = "notices";
   const params = new URLSearchParams();
   if (page === "Timetable") {
     params.set("on", date);
-    params.set("week", String(tab === "week"));
+    params.set("week", "true");
     path = "/v1/timetable";
     kind = "classes";
   } else if (page === "Canteen") {
@@ -78,6 +100,45 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
       }
   >(path + "?" + params, w);
   const rows = Array.isArray(data) ? data : [];
+
+  async function handleSaveSlot(id: string, updated: Record<string, unknown>) {
+    setEditError("");
+    try {
+      await api(`/v1/timetable/${id}`, w.session, w.tenant, {
+        method: "PATCH",
+        body: JSON.stringify(updated),
+      });
+      w.refresh();
+    } catch (e) {
+      setEditError((e as Error).message);
+    }
+  }
+
+  async function handleDeleteSlot(id: string) {
+    setEditError("");
+    try {
+      await api(`/v1/timetable/${id}`, w.session, w.tenant, {
+        method: "DELETE",
+      });
+      w.refresh();
+    } catch (e) {
+      setEditError((e as Error).message);
+    }
+  }
+
+  async function handleCreateSlot(created: Record<string, unknown>) {
+    setEditError("");
+    try {
+      await api("/v1/timetable", w.session, w.tenant, {
+        method: "POST",
+        body: JSON.stringify(created),
+      });
+      w.refresh();
+    } catch (e) {
+      setEditError((e as Error).message);
+    }
+  }
+
   return (
     <>
       <div className="page-heading">
@@ -92,13 +153,16 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
         </div>
       </div>
       {page === "Timetable" && (
-        <div className="tabs" aria-label="Timetable view">
-          <button aria-pressed={tab === "day"} onClick={() => setTab("day")}>
-            Day view
-          </button>
-          <button aria-pressed={tab === "week"} onClick={() => setTab("week")}>
-            Week view
-          </button>
+        <div className="tabs" aria-label="Timetable day filter">
+          {TIMETABLE_DAYS.map((d) => (
+            <button
+              key={d.id}
+              aria-pressed={tab === d.id}
+              onClick={() => setTab(d.id)}
+            >
+              {d.label}
+            </button>
+          ))}
         </div>
       )}
       {page === "Canteen" && (
@@ -115,7 +179,7 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
         </div>
       )}
       <div className="filters">
-        {["Timetable", "Calendar", "Events"].includes(page) && (
+        {["Calendar", "Events"].includes(page) && (
           <div className="filter-field small">
             <label htmlFor="date">
               {page === "Calendar" ? "Week starting" : "Date"}
@@ -213,7 +277,7 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
           Refresh
         </Button>
       </div>
-      <ErrorBox message={error} />
+      <ErrorBox message={error || editError} />
       {loading ? (
         <Loading />
       ) : page === "Calendar" && data && !Array.isArray(data) ? (
@@ -244,8 +308,15 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
             )}
           </section>
         </>
-      ) : page === "Timetable" && tab === "week" ? (
-        <WeekGrid records={rows} date={date} onSource={w.download} />
+      ) : page === "Timetable" ? (
+        <TimetableTable
+          records={rows}
+          selectedDay={tab}
+          editable={isAdmin}
+          onSaveSlot={handleSaveSlot}
+          onDeleteSlot={handleDeleteSlot}
+          onCreateSlot={handleCreateSlot}
+        />
       ) : (
         <>
           <div className="section-header">
@@ -253,7 +324,7 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
               {rows.length} result{rows.length === 1 ? "" : "s"}
               {page === "Canteen" ? " · Available items only" : ""}
             </p>
-            {page === "Timetable" && (
+            {page === "Events" && (
               <span className="subtle">
                 <CalendarDays
                   size={13}

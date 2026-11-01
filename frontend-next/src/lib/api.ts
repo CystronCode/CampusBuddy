@@ -107,6 +107,7 @@ export interface Overview {
 export interface Job {
   id: string;
   source_id: string;
+  data_type?: string;
   status: string;
   error: string | null;
   attempts: number;

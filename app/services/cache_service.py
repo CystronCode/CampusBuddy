@@ -60,6 +60,7 @@ async def get_cached_scope_rows(table: str, scope: str) -> List[Dict[str, Any]]:
                                       COALESCE(subject_code, subject) AS subject_code,
                                       COALESCE(subject_name, subject) AS subject_name,
                                       COALESCE(subject, subject_name) AS subject, 
+                                      COALESCE(kind, 'lecture') AS kind,
                                       COALESCE(room_no, room) AS room_no,
                                       COALESCE(room, room_no) AS room, 
                                       faculty_code, faculty_code AS short_code, version 
@@ -77,6 +78,7 @@ async def get_cached_scope_rows(table: str, scope: str) -> List[Dict[str, Any]]:
                                       COALESCE(subject_code, subject) AS subject_code,
                                       COALESCE(subject_name, subject) AS subject_name,
                                       COALESCE(subject, subject_name) AS subject, 
+                                      COALESCE(kind, 'lecture') AS kind,
                                       COALESCE(room_no, room) AS room_no,
                                       COALESCE(room, room_no) AS room, 
                                       faculty_code, faculty_code AS short_code, version 
@@ -94,6 +96,7 @@ async def get_cached_scope_rows(table: str, scope: str) -> List[Dict[str, Any]]:
                                   COALESCE(subject_code, subject) AS subject_code,
                                   COALESCE(subject_name, subject) AS subject_name,
                                   COALESCE(subject, subject_name) AS subject, 
+                                  COALESCE(kind, 'lecture') AS kind,
                                   COALESCE(room_no, room) AS room_no,
                                   COALESCE(room, room_no) AS room, 
                                   faculty_code, faculty_code AS short_code, version 

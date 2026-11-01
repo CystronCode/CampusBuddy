@@ -2,13 +2,15 @@ from typing import List, Optional, Dict, Any, Type
 from pydantic import BaseModel, Field
 
 class TimetableSlot(BaseModel):
-    day: int = Field(..., ge=1, le=7, description="Day of the week: 1=Monday, 7=Sunday")
+    day: int = Field(..., ge=1, le=7, description="Day of the week: 1=Monday, 2=Tuesday, 3=Wednesday, 4=Thursday, 5=Friday, 6=Saturday, 7=Sunday")
     period: Optional[int] = Field(None, description="Class period number")
     start_time: str = Field(..., description="Start time in 24-hour HH:MM format")
     end_time: str = Field(..., description="End time in 24-hour HH:MM format")
-    subject: str = Field(..., description="Subject code or title")
+    subject: str = Field(..., description="Subject code and/or title (e.g., CS235AT - Operating Systems or CS233AI)")
+    subject_name: Optional[str] = Field(None, description="Full course title mapped from the timetable legend/table below the grid (e.g., Operating Systems, Data Structures and Applications)")
     kind: Optional[str] = Field("lecture", description="lecture, lab, tutorial, or other")
-    short_code: Optional[str] = Field(None, description="Faculty short-code (e.g., AK, SM)")
+    short_code: Optional[str] = Field(None, description="Faculty initials / short-code handling the course (e.g., SN, KVR, RP, AI)")
+    faculty_name: Optional[str] = Field(None, description="Full name of the course-handling faculty mapped from the timetable legend/footer table (e.g., Dr. Somesh Nandi, Prof. K V Raghavendra)")
     room: Optional[str] = Field(None, description="Room number or lab identifier")
 
 class TimetableExtraction(BaseModel):

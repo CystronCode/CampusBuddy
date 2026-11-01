@@ -175,16 +175,27 @@ async def approve_submission(submission_id: str, request: Request):
                             y_val = s.get("year") or def_year
                             sec_val = s.get("section") or def_sec
                             day_val = s.get("day") or s.get("day_of_week") or 1
-                            subj_val = s.get("subject") or s.get("subject_name") or "Course"
+                            subj_code_raw = str(s.get("subject_code") or s.get("subject") or "Course").strip()
+                            subj_name_raw = str(s.get("subject_name") or "").strip()
+                            if subj_name_raw and subj_name_raw.lower() not in subj_code_raw.lower():
+                                subj_val = f"{subj_code_raw} — {subj_name_raw}"
+                            else:
+                                subj_val = subj_code_raw
+                                subj_name_raw = subj_name_raw or subj_code_raw
                             room_val = s.get("room") or s.get("room_no") or "TBA"
-                            fac_code = s.get("short_code") or s.get("faculty_code")
+                            fac_short = str(s.get("short_code") or s.get("faculty_code") or "").strip()
+                            fac_full = str(s.get("faculty_name") or s.get("faculty") or "").strip()
+                            if fac_full and fac_short and fac_short.lower() not in fac_full.lower():
+                                fac_code = f"{fac_short} ({fac_full})"
+                            else:
+                                fac_code = fac_full or fac_short or None
                             await conn.execute(
                                 """INSERT INTO timetable_slots 
                                    (scope, branch, year, section, day, day_of_week, period, start_time, end_time, 
                                     subject, subject_name, subject_code, kind, faculty_id, faculty_code, room, room_no, version, submission_id)
                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                                 (scope_key, b_val, y_val, sec_val, day_val, day_val, s.get("period"),
-                                 s["start_time"], s["end_time"], subj_val, subj_val, subj_val[:20], s.get("kind", "lecture"),
+                                 s["start_time"], s["end_time"], subj_val, subj_name_raw, subj_code_raw[:20], s.get("kind", "lecture"),
                                  s.get("faculty_id"), fac_code, room_val, room_val, new_version, submission_id)
                             )
                         # Purge versions older than last 3

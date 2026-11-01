@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Upload, RefreshCw, Check, FileText, Code2 } from "lucide-react";
+import { Upload, RefreshCw, Check, FileText, Code2, Plus, Trash2 } from "lucide-react";
 import {
   type Workspace,
   useRemote,
@@ -66,6 +66,7 @@ export function AdminView({
   const [claim, setClaim] = useState("");
   const [demo, setDemo] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
+  const [editableRecords, setEditableRecords] = useState<DataRecord[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -81,6 +82,7 @@ export function AdminView({
           const next = rows.find((j) => j.id === job.id);
           if (active && next) {
             setJob(next);
+            setEditableRecords(next.preview.records || []);
             if (!["queued", "processing"].includes(next.status)) w.refresh();
           }
         })
@@ -95,6 +97,7 @@ export function AdminView({
   }, [job?.id, job?.status, w.session, w.tenant]);
   function selectJob(next: Job) {
     setJob(next);
+    setEditableRecords(next.preview.records ? next.preview.records.map((r) => ({ ...r })) : []);
     setMapping(next.preview.mapping || {});
   }
   async function preview(e: React.FormEvent) {
@@ -139,13 +142,19 @@ export function AdminView({
     setBusy(true);
     setError("");
     try {
+      const bodyPayload =
+        action === "mapping"
+          ? JSON.stringify({ mapping })
+          : action === "confirm"
+            ? JSON.stringify({ records: editableRecords })
+            : undefined;
       const next = await api<Job>(
         `/v1/ingestion/${job.id}/${action}`,
         w.session,
         w.tenant,
         {
           method: "POST",
-          body: action === "mapping" ? JSON.stringify({ mapping }) : undefined,
+          body: bodyPayload,
         },
       );
       selectJob(next);
@@ -384,7 +393,7 @@ export function AdminView({
                         accept={
                           kind === "document"
                             ? ".pdf,.txt,.md,.png,.jpg,.jpeg"
-                            : ".csv,.xlsx,.json,.png,.jpg,.jpeg"
+                            : ".pdf,.csv,.xlsx,.json,.png,.jpg,.jpeg"
                         }
                         onChange={(e) => setFile(e.target.files?.[0] || null)}
                       />
@@ -549,8 +558,13 @@ export function AdminView({
                       </ul>
                     </>
                   )}
-                  {job.preview.records && job.preview.records.length > 0 && (
-                    <PreviewTable records={job.preview.records} />
+                  {editableRecords.length > 0 && (
+                    <PreviewTable
+                      records={editableRecords}
+                      columns={job.preview.columns}
+                      editable={job.status === "preview"}
+                      onChange={setEditableRecords}
+                    />
                   )}
                   <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
                     {job.status === "preview" && (
@@ -559,10 +573,7 @@ export function AdminView({
                         disabled={busy || !!job.preview.error_count}
                       >
                         <Check size={15} />
-                        Confirm import
-                        {job.preview.valid_count !== undefined
-                          ? ` · ${job.preview.valid_count} records`
-                          : ""}
+                        Confirm import · {editableRecords.length} records
                       </Button>
                     )}
                     {job.status === "failed" && (
@@ -678,33 +689,136 @@ export function AdminView({
   );
 }
 
-function PreviewTable({ records }: { records: DataRecord[] }) {
-  const fields = Object.keys(records[0] || {});
+const PREVIEW_DAYS = [
+  "Monday",
+  "Tuesday",
+  "Wednesday",
+  "Thursday",
+  "Friday",
+  "Saturday",
+  "Sunday",
+];
+
+function PreviewTable({
+  records,
+  columns,
+  editable = false,
+  onChange,
+}: {
+  records: DataRecord[];
+  columns?: string[];
+  editable?: boolean;
+  onChange?: (next: DataRecord[]) => void;
+}) {
+  const fields = columns?.length ? columns : Object.keys(records[0] || {});
+
+  function updateCell(rowIdx: number, field: string, value: string) {
+    if (!onChange) return;
+    const next = records.map((r, i) => (i === rowIdx ? { ...r, [field]: value } : r));
+    onChange(next);
+  }
+
+  function removeRow(rowIdx: number) {
+    if (!onChange) return;
+    onChange(records.filter((_, i) => i !== rowIdx));
+  }
+
+  function addRow() {
+    if (!onChange) return;
+    const blank: DataRecord = {};
+    for (const f of fields) {
+      blank[f] = f === "day" ? "Monday" : f === "kind" ? "lecture" : "";
+    }
+    onChange([...records, blank]);
+  }
+
   return (
-    <div className="data-table-wrap">
-      <table>
-        <caption className="sr-only">Normalized import preview</caption>
-        <thead>
-          <tr>
-            {fields.map((f) => (
-              <th key={f}>{f.replaceAll("_", " ")}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {records.map((r, i) => (
-            <tr key={i}>
+    <div>
+      {editable && onChange && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <span className="subtle" style={{ fontSize: 12 }}>
+            Editable preview table — modify any cell or remove unwanted rows before confirming import.
+          </span>
+          <Button type="button" variant="outline" size="sm" onClick={addRow}>
+            <Plus size={13} /> Add row
+          </Button>
+        </div>
+      )}
+      <div className="data-table-wrap">
+        <table>
+          <caption className="sr-only">Normalized import preview</caption>
+          <thead>
+            <tr>
               {fields.map((f) => (
-                <td key={f}>
-                  {Array.isArray(r[f])
-                    ? (r[f] as unknown[]).join(", ")
-                    : text(r[f])}
-                </td>
+                <th key={f}>{f.replaceAll("_", " ")}</th>
               ))}
+              {editable && onChange && <th style={{ width: 60 }}>Remove</th>}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {records.map((r, i) => (
+              <tr key={i}>
+                {fields.map((f) => {
+                  const val = Array.isArray(r[f])
+                    ? (r[f] as unknown[]).join(", ")
+                    : text(r[f]);
+                  if (!editable || !onChange) {
+                    return <td key={f}>{val}</td>;
+                  }
+                  if (f === "day") {
+                    return (
+                      <td key={f}>
+                        <select
+                          value={
+                            PREVIEW_DAYS.find((d) =>
+                              val.toLowerCase().startsWith(d.toLowerCase().slice(0, 3)),
+                            ) || val || "Monday"
+                          }
+                          onChange={(e) => updateCell(i, f, e.target.value)}
+                          style={{ minHeight: 30, padding: "3px 6px", fontSize: 12 }}
+                        >
+                          {PREVIEW_DAYS.map((d) => (
+                            <option key={d} value={d}>
+                              {d}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                    );
+                  }
+                  return (
+                    <td key={f}>
+                      <input
+                        value={val}
+                        onChange={(e) => updateCell(i, f, e.target.value)}
+                        style={{
+                          minHeight: 30,
+                          padding: "3px 7px",
+                          fontSize: 12,
+                          minWidth: f.includes("name") || f === "subject" ? 150 : 85,
+                        }}
+                      />
+                    </td>
+                  );
+                })}
+                {editable && onChange && (
+                  <td>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeRow(i)}
+                      title="Remove row"
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

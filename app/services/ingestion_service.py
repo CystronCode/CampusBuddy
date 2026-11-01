@@ -90,6 +90,9 @@ async def extract_via_gemini_vision(content: bytes, mime: str, schema_cls: Any) 
                     contents=[
                         types.Part.from_bytes(data=content, mime_type=mime),
                         "Extract structured records adhering precisely to the JSON schema. "
+                        "For timetables: carefully inspect both the main schedule grid AND any course/faculty legend or mapping table below/beside the grid. "
+                        "For every timetable slot, map the subject code to its full course name (subject_name) AND map the faculty initials (short_code) and course-handling faculty full name (faculty_name) from the timetable legend/footer table! "
+                        "Do not confuse faculty initials (like AI, RP, SN, KVR) with room numbers unless explicitly labeled as a room. "
                         "For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays. "
                         "For faculty profiles or directories, extract ALL details in full (not just contact info): educational qualifications, degrees, teaching/research/industry experience, research interests, courses/subjects taught, publications/journals/conferences/patents, funded projects/grants, awards/memberships, administrative responsibilities, and a comprehensive bio summary. "
                         "Output valid JSON without markdown wrapping or code fences."
@@ -157,6 +160,10 @@ async def enqueue_extraction_task(
                                         first_fac = cand["faculty"][0] if isinstance(cand["faculty"][0], dict) else {}
                                         if not any(first_fac.get(f) for f in ("qualifications", "experience", "publications", "bio", "research_interests")):
                                             continue
+                                    elif k == "slots":
+                                        # Only reuse cached timetable extraction if it includes faculty/course mapping
+                                        if not any(isinstance(sl, dict) and (sl.get("faculty_name") or sl.get("subject_name")) for sl in cand["slots"]):
+                                            continue
                                     extracted_data = cand
                                     logger.info("Reusing existing extraction for sha256 %s (%s rows)", file_sha256[:10], len(cand[k]))
                                     break
@@ -195,6 +202,8 @@ async def enqueue_extraction_task(
                     if has_text_layer and client is not None and target_schema is not None:
                         prompt = (
                             f"Convert the following campus raw text into structured JSON adhering to the schema. "
+                            f"For timetables: carefully inspect both the main schedule grid AND any course/faculty legend or mapping table below/beside the grid. "
+                            f"For every timetable slot, map the subject code to its full course name (subject_name) AND map the faculty initials (short_code) and course-handling faculty full name (faculty_name) from the timetable legend/footer table! "
                             f"For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays. "
                             f"For faculty profiles or directories, extract ALL details in full (not just contact info): educational qualifications, degrees, teaching/research/industry experience, research interests, courses/subjects taught, publications/journals/conferences/patents, funded projects/grants, awards/memberships, administrative responsibilities, and a comprehensive bio summary:\n{text_layer}"
                         )
