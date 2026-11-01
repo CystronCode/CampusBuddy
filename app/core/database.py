@@ -4,12 +4,12 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Any
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
-from app.core.config import settings
+from app.core.config import settings, ensure_ipv4_supabase_url
 
 logger = logging.getLogger("campus.database")
 
-DATABASE_URL = os.environ.get("DATABASE_URL", settings.DATABASE_URL)
-DATABASE_URL_READONLY = os.environ.get("DATABASE_URL_READONLY", settings.DATABASE_URL_READONLY)
+DATABASE_URL = ensure_ipv4_supabase_url(os.environ.get("DATABASE_URL", settings.DATABASE_URL))
+DATABASE_URL_READONLY = ensure_ipv4_supabase_url(os.environ.get("DATABASE_URL_READONLY", settings.DATABASE_URL_READONLY))
 
 # Invariant: max_size=5 per pool to stay well within container & free-tier limits
 # prepare_threshold=None explicitly disables prepared statements for transaction pooler compatibility (Supabase / Neon / PgBouncer)

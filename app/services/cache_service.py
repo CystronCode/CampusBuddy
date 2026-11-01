@@ -131,11 +131,16 @@ async def get_cached_scope_rows(table: str, scope: str) -> List[Dict[str, Any]]:
 
             elif table == "faculty":
                 c = await conn.execute(
-                    """SELECT id, short_code, full_name, full_name AS name, 
-                              email, cabin, designation, branch, branch AS department, is_active 
+                    """SELECT id, short_code,
+                              COALESCE(full_name, name) AS full_name,
+                              COALESCE(name, full_name) AS name, 
+                              email, cabin, designation,
+                              COALESCE(branch, department) AS branch,
+                              COALESCE(department, branch) AS department,
+                              office_hours, subjects, subjects_text, is_active 
                        FROM faculty 
                        WHERE is_active = true 
-                       ORDER BY full_name"""
+                       ORDER BY COALESCE(full_name, name)"""
                 )
                 rows = await c.fetchall()
 

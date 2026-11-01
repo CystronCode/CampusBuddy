@@ -288,13 +288,19 @@ async def approve_submission(submission_id: str, request: Request):
             elif sub["data_type"] == "faculty":
                 fac_list = extracted_data if isinstance(extracted_data, list) else extracted_data.get("faculty", [])
                 for f in fac_list:
-                    subj_text = ", ".join(f.get("subjects", []))
+                    fname = f.get("name") or f.get("full_name") or "Faculty Member"
+                    fdept = f.get("department") or f.get("branch") or "CSE"
+                    fcode = f.get("short_code") or "".join(w[0].upper() for w in fname.split() if w and w[0].isalpha())[:5] or "FAC"
+                    subj_list = f.get("subjects") or []
+                    subj_text = ", ".join(subj_list) if isinstance(subj_list, list) else str(subj_list)
                     await conn.execute(
-                        """INSERT INTO faculty (name, short_code, department, designation, email, 
+                        """INSERT INTO faculty (name, full_name, short_code, department, branch, designation, email, 
                                                 cabin, office_hours, subjects, subjects_text, submission_id)
-                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s)
                            ON CONFLICT (lower(name), coalesce(department, '')) DO UPDATE
-                           SET short_code = EXCLUDED.short_code,
+                           SET full_name = EXCLUDED.full_name,
+                               short_code = EXCLUDED.short_code,
+                               branch = EXCLUDED.branch,
                                designation = EXCLUDED.designation,
                                email = coalesce(EXCLUDED.email, faculty.email),
                                cabin = EXCLUDED.cabin,
@@ -303,8 +309,8 @@ async def approve_submission(submission_id: str, request: Request):
                                subjects_text = EXCLUDED.subjects_text,
                                is_active = true,
                                submission_id = EXCLUDED.submission_id""",
-                        (f["name"], f.get("short_code"), f.get("department"), f.get("designation"),
-                         f.get("email"), f.get("cabin"), f.get("office_hours"), f.get("subjects", []),
+                        (fname, fname, fcode, fdept, fdept, f.get("designation"),
+                         f.get("email"), f.get("cabin"), f.get("office_hours"), json.dumps(subj_list),
                          subj_text, submission_id)
                     )
                 await conn.execute("""UPDATE data_versions SET rev = rev + 1, updated_at = now() WHERE scope = 'faculty:all'""")

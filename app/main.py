@@ -50,7 +50,10 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS Middleware for web browser clients
+# Register Session Security & CSRF Middleware first (inner)
+app.add_middleware(SessionSecurityMiddleware)
+
+# Register CORS Middleware LAST so it is the OUTERMOST middleware and always attaches CORS headers even on 500 errors
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -60,8 +63,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register Session Security & CSRF Middleware
-app.add_middleware(SessionSecurityMiddleware)
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Server error: {str(exc)}"},
+    )
 
 @app.get("/")
 @app.head("/")

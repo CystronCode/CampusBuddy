@@ -11,14 +11,40 @@ try:
 except ImportError:
     pass
 
+def ensure_ipv4_supabase_url(url: str) -> str:
+    """
+    Automatically rewrites direct IPv6-only Supabase URLs (db.<ref>.supabase.co)
+    to the IPv4 Supavisor pooler so cloud platforms without IPv6 (e.g. Render Free)
+    connect automatically even if the old DATABASE_URL is configured.
+    """
+    if "db.qfrrcwsetmbggreiefcd.supabase.co" in url:
+        url = url.replace("postgresql://postgres:", "postgresql://postgres.qfrrcwsetmbggreiefcd:")
+        url = url.replace("@db.qfrrcwsetmbggreiefcd.supabase.co:5432/", "@aws-0-ap-northeast-1.pooler.supabase.com:6543/")
+    return url
+
+_DEFAULT_ORIGINS = [
+    "https://campusos-mvp.vercel.app",
+    "https://campusbuddy.vercel.app",
+    "https://campusos.vercel.app",
+    "https://app.campus.edu",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
 class Settings(BaseModel):
-    DATABASE_URL: str = os.environ.get(
-        "DATABASE_URL", 
-        "postgresql://app_write:CHANGE_ME_WRITE_SECRET@localhost:5432/postgres"
+    DATABASE_URL: str = ensure_ipv4_supabase_url(
+        os.environ.get(
+            "DATABASE_URL", 
+            "postgresql://app_write:CHANGE_ME_WRITE_SECRET@localhost:5432/postgres"
+        )
     )
-    DATABASE_URL_READONLY: str = os.environ.get(
-        "DATABASE_URL_READONLY", 
-        "postgresql://app_read:CHANGE_ME_READ_SECRET@localhost:5432/postgres"
+    DATABASE_URL_READONLY: str = ensure_ipv4_supabase_url(
+        os.environ.get(
+            "DATABASE_URL_READONLY", 
+            "postgresql://app_read:CHANGE_ME_READ_SECRET@localhost:5432/postgres"
+        )
     )
     JWT_SECRET: str = os.environ.get("JWT_SECRET", "super-secret-campus-jwt-key-change-in-prod-32chars")
     COLLEGE_EMAIL_DOMAIN: str = os.environ.get("COLLEGE_EMAIL_DOMAIN", "college.edu").lower()
@@ -26,15 +52,19 @@ class Settings(BaseModel):
     EMAIL_FROM: str = os.environ.get("EMAIL_FROM", "auth@campus.edu")
     COOKIE_DOMAIN: str | None = os.environ.get("COOKIE_DOMAIN", None) or None
     COOKIE_SECURE: bool = os.environ.get("COOKIE_SECURE", "false").lower() in ("true", "1", "yes")
-    ALLOWED_ORIGINS: list[str] = [
-        o.strip() for o in os.environ.get(
-            "ALLOWED_ORIGINS", 
-            "https://app.campus.edu,http://localhost:3000,http://localhost:8000,http://127.0.0.1:8000"
-        ).split(",") if o.strip()
-    ]
+    ALLOWED_ORIGINS: list[str] = list(
+        dict.fromkeys(
+            [
+                o.strip() for o in os.environ.get(
+                    "ALLOWED_ORIGINS", 
+                    ",".join(_DEFAULT_ORIGINS)
+                ).split(",") if o.strip()
+            ] + _DEFAULT_ORIGINS
+        )
+    )
     ALLOWED_ORIGIN_REGEX: str | None = os.environ.get(
         "ALLOWED_ORIGIN_REGEX",
-        r"^https:\/\/.*\.vercel\.app$"
+        r"^https?:\/\/(.*\.vercel\.app|.*\.onrender\.com|localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$"
     )
     STORAGE_ENDPOINT: str = os.environ.get("STORAGE_ENDPOINT", "https://s3.us-east-1.amazonaws.com")
     STORAGE_BUCKET: str = os.environ.get("STORAGE_BUCKET", "campus-intelligence-private")
