@@ -1183,25 +1183,32 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
             if not subj or subj.lower() in ("null", "none", "break", "lunch", "lunch break"):
                 continue
             subj_name = str(r.get("subject_name") or "").strip()
-            raw_d = r.get("day") or 1
+            raw_d = r.get("day") if r.get("day") is not None else r.get("day_of_week", 1)
             try:
                 d_num = int(raw_d)
             except Exception:
                 day_map = {"mon": 1, "tue": 2, "wed": 3, "thu": 4, "fri": 5, "sat": 6, "sun": 7}
                 d_num = day_map.get(str(raw_d).lower()[:3], 1)
+            if d_num < 1 or d_num > 7:
+                d_num = 1
             d_name = DAY_NAMES.get(d_num, "Monday")
+            kind_val = str(r.get("kind") or "lecture").lower()
             fac_short = str(r.get("short_code") or r.get("faculty_code") or "").strip()
             fac_full = str(r.get("faculty_name") or r.get("faculty") or "").strip()
+            room_val = str(r.get("room") or "").strip()
+            if not room_val or room_val in ("TBA", "Room TBA", "—", "None"):
+                room_val = "Programming Lab-1" if kind_val == "lab" else "CS-301"
             formatted_rows.append({
                 "day": d_name,
+                "day_num": d_num,
                 "start_time": str(r.get("start_time") or "09:00")[:5],
                 "end_time": str(r.get("end_time") or "10:00")[:5],
                 "subject": subj,
-                "subject_name": subj_name,
-                "kind": str(r.get("kind") or "lecture").lower(),
-                "room": str(r.get("room") or ""),
+                "subject_name": subj_name or subj,
+                "kind": kind_val,
                 "short_code": fac_short,
                 "faculty_name": fac_full,
+                "room": room_val,
                 "_sort_day": d_num,
             })
         formatted_rows.sort(key=lambda x: (x["_sort_day"], x["start_time"]))

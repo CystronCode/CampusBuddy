@@ -10,6 +10,8 @@ import {
 import { api, text, prettyDate, type Job, type DataRecord } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { DemoBadge, Empty } from "@/components/result-cards";
+import { TimetableCardTable } from "@/components/timetable-card-table";
+import { normalizeDay } from "@/lib/timetable-legend";
 
 interface SystemInfo {
   verification?: {
@@ -559,12 +561,24 @@ export function AdminView({
                     </>
                   )}
                   {editableRecords.length > 0 && (
-                    <PreviewTable
-                      records={editableRecords}
-                      columns={job.preview.columns}
-                      editable={job.status === "preview"}
-                      onChange={setEditableRecords}
-                    />
+                    (kind === "timetable" ||
+                      job.data_type === "timetable" ||
+                      (job.preview.columns &&
+                        (job.preview.columns.includes("day") ||
+                          job.preview.columns.includes("start_time")))) ? (
+                      <TimetableCardTable
+                        records={editableRecords}
+                        editable={job.status === "preview"}
+                        onChange={setEditableRecords}
+                      />
+                    ) : (
+                      <PreviewTable
+                        records={editableRecords}
+                        columns={job.preview.columns}
+                        editable={job.status === "preview"}
+                        onChange={setEditableRecords}
+                      />
+                    )
                   )}
                   <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
                     {job.status === "preview" && (
@@ -765,15 +779,12 @@ function PreviewTable({
                   if (!editable || !onChange) {
                     return <td key={f}>{val}</td>;
                   }
-                  if (f === "day") {
+                  if (f === "day" || f === "day_of_week") {
+                    const dayVal = normalizeDay(val);
                     return (
                       <td key={f}>
                         <select
-                          value={
-                            PREVIEW_DAYS.find((d) =>
-                              val.toLowerCase().startsWith(d.toLowerCase().slice(0, 3)),
-                            ) || val || "Monday"
-                          }
+                          value={dayVal}
                           onChange={(e) => updateCell(i, f, e.target.value)}
                           style={{ minHeight: 30, padding: "3px 6px", fontSize: 12 }}
                         >

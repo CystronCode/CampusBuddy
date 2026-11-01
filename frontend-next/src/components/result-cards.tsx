@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { TimetableCardTable } from "@/components/timetable-card-table";
 import {
   MapPin,
   Clock3,
@@ -653,7 +654,7 @@ export function TimetableTable({
             </p>
           </div>
           {editable && onCreateSlot && (
-            <Button size="sm" onClick={() => setAddingNew((v) => !v)}>
+            <Button size="sm" onClick={() => setAddingNew((v: boolean) => !v)}>
               <Plus size={14} />
               {addingNew ? "Cancel new slot" : "Add class slot"}
             </Button>
@@ -939,7 +940,7 @@ export function RecordList({
 }) {
   if (!records.length) return <Empty />;
   if (kind === "classes") {
-    return <TimetableTable records={records} selectedDay="all" />;
+    return <TimetableCardTable records={records} editable={false} />;
   }
   return (
     <>

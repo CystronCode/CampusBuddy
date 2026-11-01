@@ -13,8 +13,8 @@ import {
   RecordList,
   Empty,
   RecordCard,
-  TimetableTable,
 } from "@/components/result-cards";
+import { TimetableCardTable } from "@/components/timetable-card-table";
 import { Button } from "@/components/ui/button";
 
 const descriptions: Partial<Record<Page, string>> = {
@@ -152,19 +152,6 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
           {w.profile.section}
         </div>
       </div>
-      {page === "Timetable" && (
-        <div className="tabs" aria-label="Timetable day filter">
-          {TIMETABLE_DAYS.map((d) => (
-            <button
-              key={d.id}
-              aria-pressed={tab === d.id}
-              onClick={() => setTab(d.id)}
-            >
-              {d.label}
-            </button>
-          ))}
-        </div>
-      )}
       {page === "Canteen" && (
         <div className="tabs" aria-label="Menu view">
           <button aria-pressed={tab !== "meals"} onClick={() => setTab("day")}>
@@ -309,9 +296,8 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
           </section>
         </>
       ) : page === "Timetable" ? (
-        <TimetableTable
+        <TimetableCardTable
           records={rows}
-          selectedDay={tab}
           editable={isAdmin}
           onSaveSlot={handleSaveSlot}
           onDeleteSlot={handleDeleteSlot}
