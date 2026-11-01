@@ -1,0 +1,14 @@
+name: Keep-Alive Ping
+on:
+  schedule:
+    # Runs every 10 minutes from 01:30 to 17:30 UTC (07:00 to 23:00 IST)
+    - cron: '*/10 1-17 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Campus API Health Endpoint
+        run: |
+          curl -f -s -o /dev/null https://api.campus.edu/api/healthz || exit 1
