@@ -63,6 +63,16 @@ app.add_middleware(
 # Register Session Security & CSRF Middleware
 app.add_middleware(SessionSecurityMiddleware)
 
+@app.get("/")
+@app.head("/")
+async def root():
+    return {"status": "ok", "service": "Campus Intelligence API"}
+
+@app.get("/health")
+@app.head("/health")
+async def health():
+    return {"status": "ok"}
+
 # Mount Routers
 app.include_router(health_router)
 app.include_router(auth_router)

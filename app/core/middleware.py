@@ -32,7 +32,7 @@ class SessionSecurityMiddleware(BaseHTTPMiddleware):
 
         # 1. Exempt public endpoints, OpenAPI documentation, MCP protocol, and Next.js /v1 Bearer routes
         if (
-            path in ("/api/healthz", "/api/auth/csrf", "/api/auth/logout", "/docs", "/openapi.json", "/redoc")
+            path in ("/", "/health", "/api/healthz", "/api/auth/csrf", "/api/auth/logout", "/docs", "/openapi.json", "/redoc")
             or path.startswith("/api/auth/otp/")
             or (path.startswith("/api/files/") and path.endswith("/raw"))
             or path.startswith("/mcp")
