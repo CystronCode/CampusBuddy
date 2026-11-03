@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import DOMPurify from 'dompurify';
+import { Mic, MicOff } from 'lucide-react';
 import { apiClient } from '../../lib/api';
 
 interface Citation {
@@ -21,7 +22,58 @@ export const ChatView: React.FC = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        setSttSupported(true);
+        const recog = new SpeechRecognition();
+        recog.continuous = false;
+        recog.interimResults = true;
+        recog.lang = 'en-IN';
+
+        recog.onresult = (event: any) => {
+          let transcript = '';
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+          }
+          setInput(transcript);
+        };
+
+        recog.onerror = (e: any) => {
+          console.warn('Speech recognition error:', e);
+          setIsListening(false);
+        };
+
+        recog.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recog;
+      }
+    }
+  }, []);
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) return;
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.warn('Could not start recognition:', err);
+      }
+    }
+  };
 
   const chips = [
     { label: 'Next Class', id: 'chip_next_class' },
@@ -172,9 +224,31 @@ export const ChatView: React.FC = () => {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about timetable, mess menu, faculty, or syllabus..."
+          placeholder={isListening ? 'Listening... speak now' : 'Ask about timetable, mess menu, faculty, or syllabus...'}
           disabled={loading}
+          style={isListening ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239, 68, 68, 0.2)' } : undefined}
         />
+        {sttSupported && (
+          <button
+            type="button"
+            onClick={toggleVoiceInput}
+            disabled={loading}
+            title={isListening ? 'Listening... click to stop' : 'Voice Input (Speech to Text)'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '0 12px',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              background: isListening ? '#ef4444' : '#f8fafc',
+              color: isListening ? '#ffffff' : '#475569',
+              cursor: 'pointer',
+            }}
+          >
+            {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
+        )}
         <button type="submit" disabled={loading || !input.trim()}>
           Send
         </button>

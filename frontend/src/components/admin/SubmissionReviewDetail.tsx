@@ -247,15 +247,114 @@ export const SubmissionReviewDetail: React.FC<Props> = ({
           </div>
         )}
 
-        {/* Tabular Grid */}
+        {/* Tabular Grid, Menu List, or Paragraph Viewer */}
         <div className="table-wrapper">
           {extractedRows.length === 0 ? (
             <div className="no-rows">
               {sub.status === 'processing'
-                ? 'Parsing table rows with AI... please wait a few seconds.'
-                : 'No tabular rows extracted for this document type.'}
+                ? 'Parsing rows with AI... please wait a few seconds.'
+                : 'No structured rows extracted for this document type.'}
             </div>
-          ) : (
+          ) : sub.data_type === 'menu' ? (
+            /* MENU INTERFACE: List format for menu items */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', padding: '12px' }}>
+              <div style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '4px' }}>
+                Canteen Menu List ({extractedRows.length} items) · Click any cell to edit dish name, meal, veg status, or price:
+              </div>
+              {extractedRows.map((row, rIdx) => {
+                const isVeg = row.is_veg === true || String(row.is_veg).toLowerCase() === 'true';
+                return (
+                  <div
+                    key={rIdx}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '10px 14px',
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      gap: '12px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+                      <span
+                        style={{
+                          width: '10px',
+                          height: '10px',
+                          borderRadius: '50%',
+                          background: isVeg ? '#16a34a' : '#dc2626',
+                          flexShrink: 0,
+                        }}
+                      />
+                      <input
+                        type="text"
+                        value={row.item || row.item_name || ''}
+                        onChange={(e) => handleCellChange(rIdx, 'item', e.target.value)}
+                        placeholder="Dish Name"
+                        style={{
+                          flex: 1,
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontWeight: 600,
+                          fontSize: '0.9rem',
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <select
+                        value={row.meal || 'lunch'}
+                        onChange={(e) => handleCellChange(rIdx, 'meal', e.target.value)}
+                        style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.85rem' }}
+                      >
+                        <option value="breakfast">Breakfast</option>
+                        <option value="lunch">Lunch</option>
+                        <option value="snacks">Snacks</option>
+                        <option value="dinner">Dinner</option>
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCellChange(rIdx, 'is_veg', !isVeg)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          background: isVeg ? '#dcfce7' : '#fee2e2',
+                          color: isVeg ? '#15803d' : '#b91c1c',
+                        }}
+                      >
+                        {isVeg ? 'Veg' : 'Non-Veg'}
+                      </button>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <span style={{ fontWeight: 700 }}>₹</span>
+                        <input
+                          type="number"
+                          value={row.price ?? ''}
+                          onChange={(e) => handleCellChange(rIdx, 'price', Number(e.target.value))}
+                          style={{
+                            width: '70px',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            border: '1px solid #cbd5e1',
+                            fontWeight: 700,
+                            fontSize: '0.9rem',
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : sub.data_type === 'timetable' ? (
+            /* TIMETABLE INTERFACE: Table format only for timetable */
             <table className="review-table">
               <thead>
                 <tr>
@@ -298,6 +397,18 @@ export const SubmissionReviewDetail: React.FC<Props> = ({
                 ))}
               </tbody>
             </table>
+          ) : (
+            /* OTHER THINGS: Paragraph format for notices, circulars, syllabus */
+            <div style={{ padding: '16px', background: '#ffffff', borderRadius: '8px', lineHeight: 1.7, color: '#1e293b' }}>
+              <h5 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: 700, color: '#334155' }}>
+                Document Paragraph Content:
+              </h5>
+              <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.9rem', background: '#f8fafc', padding: '14px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                {extractedRows
+                  .map((r) => (typeof r === 'string' ? r : r.content || r.text || r.description || JSON.stringify(r)))
+                  .join('\n\n')}
+              </div>
+            </div>
           )}
         </div>
       </div>

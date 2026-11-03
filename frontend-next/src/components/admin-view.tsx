@@ -564,17 +564,32 @@ export function AdminView({
                     (kind === "timetable" ||
                       job.data_type === "timetable" ||
                       (job.preview.columns &&
-                        (job.preview.columns.includes("day") ||
+                        (job.preview.columns.includes("day") &&
                           job.preview.columns.includes("start_time")))) ? (
+                      /* 1. Timetable: Table format only for timetable */
                       <TimetableCardTable
                         records={editableRecords}
                         editable={job.status === "preview"}
                         onChange={setEditableRecords}
                       />
-                    ) : (
-                      <PreviewTable
+                    ) : (kind === "menu" || job.data_type === "menu") ? (
+                      /* 2. Menu: List format for menu */
+                      <MenuListPreview
                         records={editableRecords}
-                        columns={job.preview.columns}
+                        editable={job.status === "preview"}
+                        onChange={setEditableRecords}
+                      />
+                    ) : (kind === "faculty" || job.data_type === "faculty") ? (
+                      /* Faculty records list preview */
+                      <FacultyListPreview
+                        records={editableRecords}
+                        editable={job.status === "preview"}
+                        onChange={setEditableRecords}
+                      />
+                    ) : (
+                      /* 3. Paragraph / Narrative format for other things (circulars, notices, syllabus) */
+                      <ParagraphPreview
+                        records={editableRecords}
                         editable={job.status === "preview"}
                         onChange={setEditableRecords}
                       />
@@ -829,6 +844,293 @@ function PreviewTable({
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function MenuListPreview({
+  records,
+  editable = false,
+  onChange,
+}: {
+  records: DataRecord[];
+  editable?: boolean;
+  onChange?: (next: DataRecord[]) => void;
+}) {
+  function updateItem(rowIdx: number, field: string, value: unknown) {
+    if (!onChange) return;
+    const next = records.map((r, i) => (i === rowIdx ? { ...r, [field]: value } : r));
+    onChange(next);
+  }
+
+  function removeItem(rowIdx: number) {
+    if (!onChange) return;
+    onChange(records.filter((_, i) => i !== rowIdx));
+  }
+
+  function addItem() {
+    if (!onChange) return;
+    onChange([
+      ...records,
+      { item: "New Menu Item", price: 50, is_veg: true, meal: "lunch" },
+    ]);
+  }
+
+  return (
+    <div className="panel" style={{ padding: "16px 20px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div>
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+            Canteen Menu List ({records.length} items)
+          </h3>
+          <p className="subtle" style={{ fontSize: 12, margin: "2px 0 0" }}>
+            Scanned dishes displayed in list format with prices and dietary tags.
+          </p>
+        </div>
+        {editable && onChange && (
+          <Button type="button" variant="outline" size="sm" onClick={addItem}>
+            <Plus size={13} /> Add item
+          </Button>
+        )}
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {records.map((r, i) => {
+          const itemName = text(r.item || r.item_name || r.name || "Dish");
+          const price = text(r.price || "25");
+          const meal = text(r.meal || "lunch").toLowerCase();
+          const isVeg = r.is_veg === true || r.vegetarian === true || String(r.is_veg).toLowerCase() === "true";
+
+          return (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "10px 14px",
+                background: "#f8fafc",
+                borderRadius: 8,
+                border: "1px solid #e2e8f0",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 200 }}>
+                <span
+                  style={{
+                    display: "inline-block",
+                    width: 10,
+                    height: 10,
+                    borderRadius: "50%",
+                    background: isVeg ? "#16a34a" : "#dc2626",
+                    flexShrink: 0,
+                  }}
+                  title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
+                />
+                {editable && onChange ? (
+                  <input
+                    value={itemName}
+                    onChange={(e) => updateItem(i, "item", e.target.value)}
+                    style={{
+                      flex: 1,
+                      minHeight: 32,
+                      padding: "4px 8px",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      borderRadius: 6,
+                      border: "1px solid #cbd5e1",
+                    }}
+                    placeholder="Dish Name"
+                  />
+                ) : (
+                  <span style={{ fontWeight: 600, fontSize: 13.5, color: "#0f172a" }}>{itemName}</span>
+                )}
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                {editable && onChange ? (
+                  <>
+                    <select
+                      value={meal}
+                      onChange={(e) => updateItem(i, "meal", e.target.value)}
+                      style={{ minHeight: 32, padding: "2px 8px", fontSize: 12, borderRadius: 6, border: "1px solid #cbd5e1" }}
+                    >
+                      <option value="breakfast">Breakfast</option>
+                      <option value="lunch">Lunch</option>
+                      <option value="snacks">Snacks</option>
+                      <option value="dinner">Dinner</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => updateItem(i, "is_veg", !isVeg)}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: 6,
+                        border: "1px solid #cbd5e1",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        background: isVeg ? "#dcfce7" : "#fee2e2",
+                        color: isVeg ? "#15803d" : "#b91c1c",
+                      }}
+                    >
+                      {isVeg ? "Veg" : "Non-Veg"}
+                    </button>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>₹</span>
+                      <input
+                        type="number"
+                        value={price}
+                        onChange={(e) => updateItem(i, "price", Number(e.target.value))}
+                        style={{
+                          width: 65,
+                          minHeight: 32,
+                          padding: "2px 6px",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          borderRadius: 6,
+                          border: "1px solid #cbd5e1",
+                        }}
+                      />
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeItem(i)}
+                      title="Remove dish"
+                    >
+                      <Trash2 size={13} />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 8px",
+                        borderRadius: 999,
+                        background: "#e2e8f0",
+                        textTransform: "capitalize",
+                        fontWeight: 600,
+                      }}
+                    >
+                      {meal}
+                    </span>
+                    <strong style={{ fontSize: 14, color: "#0f172a" }}>₹{price}</strong>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FacultyListPreview({
+  records,
+  editable = false,
+  onChange,
+}: {
+  records: DataRecord[];
+  editable?: boolean;
+  onChange?: (next: DataRecord[]) => void;
+}) {
+  return (
+    <div className="panel" style={{ padding: "16px 20px" }}>
+      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>
+        Faculty Directory ({records.length} profiles)
+      </h3>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {records.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              padding: "12px 16px",
+              background: "#f8fafc",
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>
+              {text(r.name || r.full_name)}
+            </div>
+            <div style={{ fontSize: 12, color: "#4f46e5", fontWeight: 600, marginTop: 2 }}>
+              {text(r.designation || "Faculty")} · {text(r.department || "Engineering")}
+            </div>
+            {!!r.cabin && (
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
+                Office / Cabin: {text(r.cabin)}
+              </div>
+            )}
+            {!!r.subjects && (
+              <div style={{ fontSize: 12, color: "#334155", marginTop: 4 }}>
+                Courses: {Array.isArray(r.subjects) ? r.subjects.join(", ") : text(r.subjects)}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ParagraphPreview({
+  records,
+  editable = false,
+  onChange,
+}: {
+  records: DataRecord[];
+  editable?: boolean;
+  onChange?: (next: DataRecord[]) => void;
+}) {
+  const narrative = records
+    .map((r) => {
+      if (r.content) return text(r.content);
+      if (r.text) return text(r.text);
+      if (r.description) return `${text(r.title)}: ${text(r.description)}`;
+      if (r.name && r.date) return `• ${text(r.name)} (${text(r.date)})`;
+      return Object.entries(r)
+        .filter(([k]) => !k.startsWith("_") && k !== "id")
+        .map(([k, v]) => `${k.replaceAll("_", " ")}: ${text(v)}`)
+        .join(" · ");
+    })
+    .join("\n\n");
+
+  return (
+    <div className="panel" style={{ padding: "18px 22px" }}>
+      <div style={{ marginBottom: 12 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+          Scanned Document Content (Narrative Paragraph Format)
+        </h3>
+        <p className="subtle" style={{ fontSize: 12, margin: "2px 0 0" }}>
+          Notices, circulars, announcements, and syllabus texts are presented in natural readable paragraphs.
+        </p>
+      </div>
+
+      <div
+        style={{
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          padding: "16px 20px",
+          fontSize: 13.5,
+          lineHeight: 1.7,
+          color: "#1e293b",
+          whiteSpace: "pre-wrap",
+          fontFamily: "inherit",
+          maxHeight: 480,
+          overflowY: "auto",
+        }}
+      >
+        {narrative || "No paragraph text extracted from document."}
       </div>
     </div>
   );

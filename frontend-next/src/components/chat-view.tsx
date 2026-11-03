@@ -7,6 +7,8 @@ import {
   Trash2,
   Sparkles,
   LoaderCircle,
+  Mic,
+  MicOff,
 } from "lucide-react";
 import { api, streamChat, type Answer } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -39,10 +41,66 @@ export function ChatView({
   const [partial, setPartial] = useState("");
   const [error, setError] = useState("");
   const [historyRevision, setHistoryRevision] = useState(0);
+  const [isListening, setIsListening] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
+  const recognitionRef = useRef<any>(null);
   const lock = useRef(false);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const handled = useRef("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const SpeechRecognition =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        setSttSupported(true);
+        const recog = new SpeechRecognition();
+        recog.continuous = false;
+        recog.interimResults = true;
+        recog.lang = "en-IN";
+
+        recog.onresult = (event: any) => {
+          let transcript = "";
+          for (let i = event.resultIndex; i < event.results.length; ++i) {
+            transcript += event.results[i][0].transcript;
+          }
+          setInput(transcript);
+        };
+
+        recog.onerror = (e: any) => {
+          console.warn("Speech recognition error:", e);
+          setIsListening(false);
+        };
+
+        recog.onend = () => {
+          setIsListening(false);
+        };
+
+        recognitionRef.current = recog;
+      }
+    }
+  }, []);
+
+  function toggleVoiceInput() {
+    if (!recognitionRef.current) {
+      setError("Speech-to-text is not supported in this browser. Please use Chrome, Edge, or Safari.");
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setError("");
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (err) {
+        console.warn("Could not start recognition:", err);
+      }
+    }
+  }
   const history = useRemote<{ id: string; title: string }[]>(
     "/v1/conversations",
     { ...w, revision: w.revision + historyRevision },
@@ -218,7 +276,7 @@ export function ChatView({
               <div className="citations">
                 {turn.answer?.sources.map((s, ix) => (
                   <button
-                    key={ix}
+                    key={ix}
                     onClick={() => w.download(s.id)}
                     title={`${s.demo ? "Demo Data · " : ""}Imported ${new Date(s.created_at).toLocaleDateString("en-IN")}`}
                   >
@@ -268,12 +326,31 @@ export function ChatView({
           </label>
           <input
             id="chat-question"
-            placeholder="Ask anything about your campus..."
+            placeholder={isListening ? "Listening... speak now" : "Ask anything about your campus..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             maxLength={2000}
             disabled={busy}
+            style={isListening ? { borderColor: "#ef4444", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.2)" } : undefined}
           />
+          {sttSupported && (
+            <Button
+              type="button"
+              variant={isListening ? "default" : "outline"}
+              onClick={toggleVoiceInput}
+              disabled={busy}
+              aria-label={isListening ? "Stop listening" : "Voice input (Speech to Text)"}
+              title={isListening ? "Listening... click to stop" : "Click to speak"}
+              style={{
+                borderRadius: 8,
+                padding: "0 12px",
+                background: isListening ? "#ef4444" : undefined,
+                color: isListening ? "#ffffff" : undefined,
+              }}
+            >
+              {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+            </Button>
+          )}
           <Button
             type="submit"
             disabled={busy || !input.trim()}
