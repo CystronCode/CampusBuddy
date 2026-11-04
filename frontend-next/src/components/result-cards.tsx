@@ -78,8 +78,8 @@ export function RecordCard({
     content = (
       <>
         <div className="record-kicker">
-          <span className={r.vegetarian ? "veg" : "nonveg"}>
-            <Leaf size={13} />
+          <span className={r.vegetarian ? "veg-badge" : "nonveg-badge"}>
+            <Leaf size={12} />
             {r.vegetarian ? "Vegetarian" : "Non-vegetarian"}
           </span>
           <strong className="price">₹{text(r.price)}</strong>

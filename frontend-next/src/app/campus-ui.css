@@ -428,8 +428,8 @@ body {
   transition: stroke-dashoffset 1.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.veg,
-.nv {
+.veg:empty,
+.nv:empty {
   display: inline-grid;
   place-items: center;
   width: 16px;
@@ -439,28 +439,62 @@ body {
   flex: none;
 }
 
-.veg {
+.veg:empty {
   border-color: #10b981;
 }
 
-.veg::after,
-.nv::after {
+.veg:empty::after,
+.nv:empty::after {
   content: "";
   width: 8px;
   height: 8px;
   border-radius: 50%;
 }
 
-.veg::after {
+.veg:empty::after {
   background: #10b981;
 }
 
-.nv {
+.nv:empty {
   border-color: #f43f5e;
 }
 
-.nv::after {
+.nv:empty::after {
   background: #f43f5e;
+}
+
+.veg-badge,
+.veg:not(:empty) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  width: auto;
+  height: auto;
+}
+
+.nonveg-badge,
+.nonveg:not(:empty) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  width: auto;
+  height: auto;
 }
 
 .bar {

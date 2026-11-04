@@ -684,17 +684,21 @@ small,
   color: var(--foreground);
   letter-spacing: -0.5px;
 }
-.veg {
-  color: #166534;
-  display: flex;
-  gap: 4px;
+.veg,
+.veg-badge {
+  color: #047857;
+  display: inline-flex;
+  gap: 5px;
   align-items: center;
+  white-space: nowrap;
 }
-.nonveg {
-  color: #9f1239;
-  display: flex;
-  gap: 4px;
+.nonveg,
+.nonveg-badge {
+  color: #b91c1c;
+  display: inline-flex;
+  gap: 5px;
   align-items: center;
+  white-space: nowrap;
 }
 .nutrition {
   font-size: 10px;
