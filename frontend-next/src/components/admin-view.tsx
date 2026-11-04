@@ -1297,6 +1297,8 @@ function Members({ w }: { w: Workspace }) {
   const [message, setMessage] = useState("");
   const [fail, setFail] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showMatrix, setShowMatrix] = useState(true);
+
   async function save(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setBusy(true);
@@ -1308,7 +1310,7 @@ function Members({ w }: { w: Workspace }) {
         method: "POST",
         body: JSON.stringify({ ...values, semester: Number(values.semester) }),
       });
-      setMessage("Membership saved. Access is checked on every request.");
+      setMessage("Role & institution membership successfully saved. Permissions take effect immediately.");
       w.refresh();
     } catch (e) {
       setFail((e as Error).message);
@@ -1316,65 +1318,201 @@ function Members({ w }: { w: Workspace }) {
       setBusy(false);
     }
   }
+
+  const roleBadge = (role: unknown) => {
+    const r = String(role || "").toLowerCase();
+    if (r.includes("institution_admin") || r.includes("platform_admin")) {
+      return <span className="badge b-adm">Institution Admin</span>;
+    }
+    if (r.includes("department_admin")) {
+      return <span className="badge b-adm" style={{ background: "#ecfdf5", borderColor: "#a7f3d0", color: "#047857" }}>Dept Admin</span>;
+    }
+    if (r.includes("faculty")) {
+      return <span className="badge" style={{ background: "#f3e8ff", borderColor: "#d8b4fe", color: "#7e22ce" }}>Faculty</span>;
+    }
+    return <span className="badge b-stu">Student</span>;
+  };
+
   return (
-    <section className="panel">
-      <h2>Institution memberships</h2>
-      <p className="subtle" style={{ margin: "10px 0 20px" }}>
-        Create the user in Supabase Auth first, then assign their institution
-        access here.
-      </p>
+    <section className="panel" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 800, margin: 0, letterSpacing: "-0.02em" }}>
+            Role-Based Access Control (RBAC) & Memberships
+          </h2>
+          <p className="subtle" style={{ margin: "6px 0 0", fontSize: 13 }}>
+            Manage campus user roles, assign departmental access, and govern permissions across institutional resources.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => setShowMatrix((prev) => !prev)}
+        >
+          {showMatrix ? "Hide Permissions Guide" : "View Permissions Guide"}
+        </Button>
+      </div>
+
+      {showMatrix && (
+        <div
+          style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: 14,
+            padding: "16px 18px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gap: 12,
+          }}
+        >
+          <div style={{ background: "#fff", padding: "12px 14px", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span className="badge b-stu">Student</span>
+            </div>
+            <p className="subtle" style={{ fontSize: 11.5, lineHeight: 1.5, margin: 0 }}>
+              Read-only personal timetable, budget canteen finder, campus circulars, personal schedule check-in.
+            </p>
+          </div>
+          <div style={{ background: "#fff", padding: "12px 14px", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span className="badge" style={{ background: "#f3e8ff", borderColor: "#d8b4fe", color: "#7e22ce" }}>Faculty</span>
+            </div>
+            <p className="subtle" style={{ fontSize: 11.5, lineHeight: 1.5, margin: 0 }}>
+              Faculty directory profile with courses taught, research interests, publications, and teaching timetable.
+            </p>
+          </div>
+          <div style={{ background: "#fff", padding: "12px 14px", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span className="badge b-adm">Dept Admin</span>
+            </div>
+            <p className="subtle" style={{ fontSize: 11.5, lineHeight: 1.5, margin: 0 }}>
+              Upload and manage departmental timetables, edit slot allocations, manage canteen menus and notices.
+            </p>
+          </div>
+          <div style={{ background: "#fff", padding: "12px 14px", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span className="badge b-adm" style={{ fontWeight: 800 }}>Institution Admin</span>
+            </div>
+            <p className="subtle" style={{ fontSize: 11.5, lineHeight: 1.5, margin: 0 }}>
+              Full administrative authority: vision ingestion, role assignment, system telemetry, audit trail, and settings.
+            </p>
+          </div>
+        </div>
+      )}
+
       <ErrorBox message={error || fail} />
       {message && (
         <div className="success" role="status">
           {message}
         </div>
       )}
-      <form onSubmit={save}>
-        <div className="upload-grid">
-          {[
-            ["user_id", "Supabase user ID"],
-            ["name", "Preferred name"],
-            ["department", "Department"],
-            ["section", "Section"],
-          ].map(([name, label]) => (
-            <div key={name}>
-              <label htmlFor={name}>{label}</label>
+
+      {/* Role Assignment Form */}
+      <div style={{ background: "rgba(255, 255, 255, 0.7)", border: "1px solid var(--line)", borderRadius: 14, padding: "18px 20px" }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 14px", color: "var(--foreground)" }}>
+          Assign Role & Member Details
+        </h3>
+        <form onSubmit={save}>
+          <div className="upload-grid">
+            {[
+              ["user_id", "Supabase User ID"],
+              ["name", "Full / Preferred Name"],
+              ["department", "Department (e.g. CSE, AIML)"],
+              ["section", "Section (e.g. A, B)"],
+            ].map(([name, label]) => (
+              <div key={name}>
+                <label htmlFor={name} style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>
+                  {label}
+                </label>
+                <input
+                  name={name}
+                  id={name}
+                  required
+                  maxLength={name === "name" ? 120 : 60}
+                  placeholder={`Enter ${label.toLowerCase()}`}
+                  style={{ borderRadius: 10, fontSize: 13.5 }}
+                />
+              </div>
+            ))}
+            <div>
+              <label htmlFor="member-role" style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>
+                Role Assignment
+              </label>
+              <select id="member-role" name="role" style={{ borderRadius: 10, fontSize: 13.5 }}>
+                <option value="student">Student (Standard Access)</option>
+                <option value="faculty">Faculty (Academic Directory & Teaching)</option>
+                <option value="department_admin">Department Administrator</option>
+                <option value="institution_admin">Institution Administrator (Full RBAC)</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="semester" style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 5 }}>
+                Semester
+              </label>
               <input
-                name={name}
-                id={name}
-                required
-                maxLength={name === "name" ? 120 : 60}
+                id="semester"
+                name="semester"
+                type="number"
+                min={1}
+                max={12}
+                defaultValue={3}
+                style={{ borderRadius: 10, fontSize: 13.5 }}
               />
             </div>
-          ))}
-          <div>
-            <label htmlFor="member-role">Role</label>
-            <select id="member-role" name="role">
-              <option value="student">Student</option>
-              <option value="faculty">Faculty</option>
-              <option value="department_admin">Department administrator</option>
-              <option value="institution_admin">
-                Institution administrator
-              </option>
-            </select>
           </div>
-          <div>
-            <label htmlFor="semester">Semester</label>
-            <input
-              id="semester"
-              name="semester"
-              type="number"
-              min={1}
-              max={12}
-              defaultValue={3}
-            />
+          <div style={{ marginTop: 18, display: "flex", gap: 10, alignItems: "center" }}>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Saving Permissions…" : "Assign Role & Save Membership"}
+            </Button>
+            <span className="subtle" style={{ fontSize: 12 }}>
+              Requires existing user identity in authentication provider.
+            </span>
           </div>
+        </form>
+      </div>
+
+      {/* Active Members & Roles Roster */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, margin: 0 }}>
+            Active Campus Members ({data?.length ?? 0})
+          </h3>
+          <span className="subtle" style={{ fontSize: 12 }}>
+            Real-time permissions roster
+          </span>
         </div>
-        <Button type="submit" style={{ marginTop: 20 }} disabled={busy}>
-          Save membership
-        </Button>
-      </form>
-      {data && <PreviewTable records={data} />}
+        {data && data.length > 0 ? (
+          <div className="data-table-wrap" style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th style={{ textAlign: "left" }}>Name</th>
+                  <th style={{ textAlign: "left" }}>Assigned Role</th>
+                  <th style={{ textAlign: "left" }}>Department</th>
+                  <th style={{ textAlign: "center" }}>Section</th>
+                  <th style={{ textAlign: "center" }}>Semester</th>
+                  <th style={{ textAlign: "left" }}>User ID</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 700, color: "var(--foreground)" }}>{text(r.name) || "—"}</td>
+                    <td>{roleBadge(r.role)}</td>
+                    <td style={{ fontWeight: 600, color: "#475569" }}>{text(r.department) || "All"}</td>
+                    <td style={{ textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12 }}>{text(r.section) || "—"}</td>
+                    <td style={{ textAlign: "center", fontFamily: "var(--font-mono)", fontSize: 12 }}>{text(r.semester) || "—"}</td>
+                    <td style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "#64748b" }}>{text(r.user_id || r.id)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <Empty message="No memberships enrolled yet." hint="Use the form above to assign institutional roles to users." />
+        )}
+      </div>
     </section>
   );
 }
