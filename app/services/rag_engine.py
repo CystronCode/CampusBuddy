@@ -42,7 +42,7 @@ async def search_docs_hybrid(
         ROW_NUMBER() OVER (ORDER BY c.embedding <=> %s::vector) AS rank_vec
       FROM doc_chunks c
       JOIN data_versions dv ON dv.scope = c.scope AND dv.active_version = c.version
-      WHERE (c.branch IS NULL OR c.branch = %s)
+      WHERE (%s::text IS NULL OR c.branch IS NULL OR c.branch = %s OR c.branch = 'ALL')
         AND (c.valid_until IS NULL OR c.valid_until >= current_date)
         AND (1 - (c.embedding <=> %s::vector)) >= %s
         AND (%s::text IS NULL OR c.doc_type = %s::text)
@@ -55,7 +55,7 @@ async def search_docs_hybrid(
         ROW_NUMBER() OVER (ORDER BY ts_rank_cd(c.tsv, websearch_to_tsquery('english', %s)) DESC) AS rank_fts
       FROM doc_chunks c
       JOIN data_versions dv ON dv.scope = c.scope AND dv.active_version = c.version
-      WHERE (c.branch IS NULL OR c.branch = %s)
+      WHERE (%s::text IS NULL OR c.branch IS NULL OR c.branch = %s OR c.branch = 'ALL')
         AND (c.valid_until IS NULL OR c.valid_until >= current_date)
         AND c.tsv @@ websearch_to_tsquery('english', %s)
         AND (%s::text IS NULL OR c.doc_type = %s::text)
@@ -80,8 +80,8 @@ async def search_docs_hybrid(
         async with get_read_db() as conn:
             cursor = await conn.execute(
                 sql,
-                (query_vector, query_vector, user_branch, query_vector, RAG_MIN_SIMILARITY, doc_type, doc_type,
-                 query_text, query_text, user_branch, query_text, doc_type, doc_type)
+                (query_vector, query_vector, user_branch, user_branch, query_vector, RAG_MIN_SIMILARITY, doc_type, doc_type,
+                 query_text, query_text, user_branch, user_branch, query_text, doc_type, doc_type)
             )
             rows = await cursor.fetchall()
             return [dict(r) for r in rows]

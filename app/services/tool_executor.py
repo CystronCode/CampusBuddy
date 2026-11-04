@@ -27,7 +27,7 @@ async def execute_tool(
         args = {k: v for k, v in args.model_dump().items() if v is not None}
     elif not isinstance(args, dict):
         args = {}
-    branch = user_context.get("branch", "CSE")
+    branch = user_context.get("branch") or user_context.get("department") or "AIML"
     year = user_context.get("year", 1)
     section = user_context.get("section", "A")
     scope = f"timetable:{branch}-{year}-{section}"
@@ -144,7 +144,7 @@ async def execute_tool(
     elif tool_name == "search_docs":
         q = args.get("query", "")
         doc_type = args.get("doc_type")
-        chunks = await search_docs_hybrid(q, user_branch=user_context.get("branch"), doc_type=doc_type)
+        chunks = await search_docs_hybrid(q, user_branch=branch, doc_type=doc_type)
         if not chunks:
             # Query holidays / academic calendar dates if question relates to exams, semester dates, or holidays
             hols = await get_cached_scope_rows("holidays", "holidays:calendar")

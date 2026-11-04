@@ -1255,16 +1255,55 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
         for r in rows:
             if not isinstance(r, dict):
                 continue
+            ri = r.get("research_interests")
+            ri_str = ", ".join(ri) if isinstance(ri, list) else str(ri or "")
+            subjs = r.get("subjects")
+            subjs_str = ", ".join(subjs) if isinstance(subjs, list) else str(subjs or "")
             formatted_rows.append({
-                "name": str(r.get("name") or "Dr. Somesh Nandi").strip(),
+                "name": str(r.get("name") or "Faculty Member").strip(),
+                "designation": str(r.get("designation") or "Assistant Professor").strip(),
                 "department": str(r.get("department") or "AIML").strip(),
-                "designation": str(r.get("designation") or "Associate Professor").strip(),
-                "email": str(r.get("email") or "someshnandi@rvce.edu.in").strip(),
-                "cabin": str(r.get("cabin") or "CSE-AIML R-102").strip(),
-                "bio": str(r.get("bio") or "").strip()[:400]
+                "email": str(r.get("email") or "").strip(),
+                "cabin": str(r.get("cabin") or "").strip(),
+                "qualifications": str(r.get("qualifications") or "").strip(),
+                "experience": str(r.get("experience") or "").strip(),
+                "research_interests": ri_str.strip(),
+                "subjects": subjs_str.strip(),
+                "publications": str(r.get("publications") or "").strip(),
+                "projects": str(r.get("projects") or "").strip(),
+                "awards": str(r.get("awards") or "").strip(),
+                "responsibilities": str(r.get("responsibilities") or "").strip(),
+                "bio": str(r.get("bio") or "").strip()
             })
         rows = formatted_rows
-        cols = ["name", "department", "designation", "email", "cabin", "bio"]
+        cols = ["name", "designation", "department", "email", "cabin", "qualifications", "experience", "research_interests", "subjects", "publications", "projects", "awards", "responsibilities", "bio"]
+    elif dtype == "menu" and rows:
+        formatted_rows = []
+        for r in rows:
+            if not isinstance(r, dict):
+                continue
+            item_name = str(r.get("item") or r.get("item_name") or r.get("name") or "").strip()
+            if not item_name:
+                continue
+            price_raw = r.get("price")
+            try:
+                price_val = int(float(str(price_raw).replace("₹", "").replace("Rs", "").replace("/-", "").strip()))
+            except Exception:
+                price_val = 30
+            meal_val = str(r.get("meal") or "snacks").lower().strip()
+            if meal_val not in ("breakfast", "lunch", "snacks", "dinner"):
+                meal_val = "snacks"
+            is_veg = r.get("is_veg")
+            if is_veg is None:
+                is_veg = not any(w in item_name.lower() for w in ("chicken", "egg", "fish", "mutton", "meat"))
+            formatted_rows.append({
+                "item": item_name,
+                "price": price_val,
+                "meal": meal_val,
+                "is_veg": bool(is_veg)
+            })
+        rows = formatted_rows
+        cols = ["item", "price", "meal", "is_veg"]
     else:
         cols = list(rows[0].keys()) if rows and isinstance(rows[0], dict) else []
 
@@ -1556,12 +1595,12 @@ async def v1_ingestion_confirm(job_id: str, request: Request):
                 for f in facs:
                     if not isinstance(f, dict):
                         continue
-                    fname = str(f.get("name") or "Dr. Somesh Nandi").strip()
+                    fname = str(f.get("name") or "Faculty Member").strip()
                     f["name"] = fname
                     f["department"] = str(f.get("department") or "AIML").strip()
-                    f["designation"] = str(f.get("designation") or "Associate Professor").strip()
-                    f["email"] = str(f.get("email") or "someshnandi@rvce.edu.in").strip()
-                    f["cabin"] = str(f.get("cabin") or "CSE-AIML R-102").strip()
+                    f["designation"] = str(f.get("designation") or "Faculty").strip()
+                    f["email"] = str(f.get("email") or "").strip()
+                    f["cabin"] = str(f.get("cabin") or "").strip()
                     clean_facs.append(f)
                 ext = {"faculty": clean_facs} if isinstance(ext, dict) else clean_facs
                 changed = True

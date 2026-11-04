@@ -17,12 +17,15 @@ async def call_groq(
     model: str = settings.GROQ_MODEL,
     temperature: float = 0.2,
     response_format_json: bool = False,
-    max_tokens: int = 1024,
+    max_tokens: int = 400,
     timeout_sec: float = 8.0
 ) -> Optional[str]:
-    """Execute low-latency LPU inference via Groq Cloud API."""
+    """Execute low-latency LPU inference via Groq Cloud API with rate-limit protection."""
     if not settings.GROQ_API_KEY:
         return None
+
+    # Cap at 950 tokens to stay under Groq's 1000 OTPM on-demand free tier limit while allowing full JSON
+    safe_max_tokens = min(max_tokens, 950)
 
     headers = {
         "Authorization": f"Bearer {settings.GROQ_API_KEY}",
@@ -32,7 +35,7 @@ async def call_groq(
         "model": model,
         "messages": messages,
         "temperature": temperature,
-        "max_tokens": max_tokens
+        "max_tokens": safe_max_tokens
     }
     if response_format_json:
         payload["response_format"] = {"type": "json_object"}
@@ -102,7 +105,7 @@ async def generate_completion(
     messages: List[Dict[str, str]],
     temperature: float = 0.2,
     response_format_json: bool = False,
-    max_tokens: int = 1024
+    max_tokens: int = 400
 ) -> str:
     """
     Unified LLM entry point.

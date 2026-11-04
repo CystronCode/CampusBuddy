@@ -8,7 +8,7 @@ logger = logging.getLogger("campus.sweeper")
 router = APIRouter(prefix="/api", tags=["Sweeper & Recovery"])
 
 async def sweep_stuck_processing_jobs():
-    """Mark any job stuck in 'processing' for >10 minutes as 'failed'."""
+    """Mark any job stuck in 'processing' for >1 minute as 'failed'."""
     try:
         async with get_write_db() as conn:
             cursor = await conn.execute(
@@ -17,7 +17,7 @@ async def sweep_stuck_processing_jobs():
                        reject_reason = 'Processing timed out or server restarted; please retry.',
                        updated_at = now()
                    WHERE status = 'processing' 
-                     AND updated_at < now() - interval '10 minutes'
+                     AND updated_at < now() - interval '1 minute'
                    RETURNING id"""
             )
             stuck_rows = await cursor.fetchall()

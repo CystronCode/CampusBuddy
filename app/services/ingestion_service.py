@@ -17,9 +17,9 @@ from app.schemas.ingestion_schemas import GET_SCHEMA_FOR_TYPE
 logger = logging.getLogger("campus.ingestion")
 
 # Singleton Invariant: exactly one extraction job executed concurrently
-EXTRACTION_SEMAPHORE = asyncio.Semaphore(1)
+EXTRACTION_SEMAPHORE = asyncio.Semaphore(5)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", settings.GEMINI_API_KEY)
-GEMINI_MODEL_EXTRACT = os.environ.get("GEMINI_MODEL_EXTRACT", settings.GEMINI_MODEL_EXTRACT)
+GEMINI_MODEL_EXTRACT = os.environ.get("GEMINI_MODEL_EXTRACT", "gemini-3.5-flash")
 
 _ai_clients: List[genai.Client] = []
 
@@ -39,14 +39,29 @@ def get_ai_client() -> Optional[genai.Client]:
     return clients[0] if clients else None
 
 def parse_pdf_text_sync(content: bytes) -> str:
-    """Extract text layer with per-page cache flushes to maintain <512MB RAM."""
+    """Extract text layer with per-page cache flushes and pypdf fallback."""
     extracted_text = []
-    with pdfplumber.open(io.BytesIO(content)) as pdf:
-        for idx, page in enumerate(pdf.pages):
-            text = page.extract_text()
-            if text:
-                extracted_text.append(f"--- PAGE {idx + 1} ---\n" + text)
-            page.flush_cache()  # Crucial memory protection
+    try:
+        with pdfplumber.open(io.BytesIO(content)) as pdf:
+            for idx, page in enumerate(pdf.pages):
+                text = page.extract_text()
+                if text:
+                    extracted_text.append(f"--- PAGE {idx + 1} ---\n" + text)
+                page.flush_cache()
+    except Exception as e:
+        logger.warning("pdfplumber parse warning: %s", e)
+
+    if not extracted_text:
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(content))
+            for idx, page in enumerate(reader.pages):
+                text = page.extract_text()
+                if text:
+                    extracted_text.append(f"--- PAGE {idx + 1} ---\n" + text)
+        except Exception as e:
+            logger.warning("pypdf fallback warning: %s", e)
+
     return "\n".join(extracted_text)
 
 def parse_excel_sync(content: bytes) -> str:
@@ -69,46 +84,109 @@ def parse_docx_sync(content: bytes) -> str:
     return "\n".join(paragraphs)
 
 CANDIDATE_MODELS = [
+    "gemini-3.5-flash",
     "gemini-3.1-flash-lite",
     "gemini-flash-latest",
-    "gemini-3.5-flash",
-    "gemini-3.1-flash-lite-preview",
-    "gemini-3-flash-preview",
 ]
 
-async def extract_via_gemini_vision(content: bytes, mime: str, schema_cls: Any) -> Any:
+def normalize_extracted_payload(cand: Any, data_type: str) -> Dict[str, Any]:
+    """Ensure returned JSON matches canonical keys for faculty, menu, timetable, holidays."""
+    if isinstance(cand, list):
+        if data_type == "menu":
+            return {"items": cand}
+        elif data_type == "faculty":
+            return {"faculty": cand}
+        elif data_type == "timetable":
+            return {"slots": cand}
+        elif data_type == "holidays":
+            return {"holidays": cand}
+        return {"records": cand}
+    if isinstance(cand, dict):
+        key_map = {
+            "menu": ("items", "menu", "dishes", "food_items", "canteen"),
+            "faculty": ("faculty", "faculty_members", "profiles", "teachers"),
+            "timetable": ("slots", "timetable", "classes", "schedule"),
+            "holidays": ("holidays", "events", "calendar", "dates"),
+        }
+        canonical_key = {"menu": "items", "faculty": "faculty", "timetable": "slots", "holidays": "holidays"}.get(data_type)
+        if canonical_key and canonical_key not in cand:
+            candidates = key_map.get(data_type, ())
+            found = False
+            for k in candidates:
+                if isinstance(cand.get(k), list) and len(cand[k]) > 0:
+                    cand[canonical_key] = cand[k]
+                    found = True
+                    break
+            if not found:
+                for k, v in cand.items():
+                    if isinstance(v, list) and len(v) > 0 and isinstance(v[0], dict):
+                        cand[canonical_key] = v
+                        break
+        return cand
+    return {}
+
+async def extract_via_gemini_vision(content: bytes, mime: str, schema_cls: Any, data_type: str = "document") -> Any:
     """Process scanned PDFs and images using Gemini Vision with multi-key & multi-model quota cascade."""
     clients = get_ai_clients()
     if not clients:
         return {}
 
+    prompt_map = {
+        "menu": "Extract all canteen/mess food items, prices, and meals. Return valid JSON adhering to schema with key 'items': [{'item': 'Name', 'price': 50, 'meal': 'breakfast'|'lunch'|'snacks'|'dinner', 'is_veg': true|false}].",
+        "faculty": "Extract ALL details of every faculty member in full: name, designation, department, email, phone, cabin, office_hours, qualifications (degrees, universities, years, ranks), experience (all roles, institutions, dates), research_interests (list of topics), subjects (courses taught), publications (all journal papers, conferences, books, patents with titles and DOIs), projects (consultancy, grants, funding, amounts), awards (all honors, ranks, memberships), responsibilities (all admin and committee roles), bio (full narrative summary). Return JSON with key 'faculty': [...].",
+        "timetable": "Extract every schedule slot with day (1=Mon..7=Sun), start_time (HH:MM), end_time (HH:MM), subject (course code and title), subject_name, kind ('lecture'|'lab'|'tutorial'), short_code (faculty initials), faculty_name (full name from legend table), room. Return JSON with key 'slots': [...].",
+        "holidays": "Extract all holidays, exam dates, CIE tests, milestones with date (YYYY-MM-DD), name, kind. Return JSON with key 'holidays': [...]."
+    }
+    vision_prompt = prompt_map.get(data_type, "Extract structured records adhering precisely to the JSON schema.")
+
     last_err = None
     for client in clients:
         for m in CANDIDATE_MODELS:
             try:
-                response = await asyncio.to_thread(
-                    client.models.generate_content,
-                    model=m,
-                    contents=[
-                        types.Part.from_bytes(data=content, mime_type=mime),
-                        "Extract structured records adhering precisely to the JSON schema. "
-                        "For timetables: carefully inspect both the main schedule grid AND any course/faculty legend or mapping table below/beside the grid. "
-                        "For every timetable slot, map the subject code to its full course name (subject_name) AND map the faculty initials (short_code) and course-handling faculty full name (faculty_name) from the timetable legend/footer table! "
-                        "Do not confuse faculty initials (like AI, RP, SN, KVR) with room numbers unless explicitly labeled as a room. "
-                        "For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays. "
-                        "For faculty profiles or directories, extract ALL details in full (not just contact info): educational qualifications, degrees, teaching/research/industry experience, research interests, courses/subjects taught, publications/journals/conferences/patents, funded projects/grants, awards/memberships, administrative responsibilities, and a comprehensive bio summary. "
-                        "Output valid JSON without markdown wrapping or code fences."
-                    ],
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json",
-                        response_schema=schema_cls,
-                        temperature=0.0
-                    )
+                # 1. Try with schema
+                response = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        client.models.generate_content,
+                        model=m,
+                        contents=[
+                            types.Part.from_bytes(data=content, mime_type=mime),
+                            vision_prompt + " Output valid JSON without markdown wrapping or code fences."
+                        ],
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=schema_cls,
+                            temperature=0.0
+                        )
+                    ),
+                    timeout=20.0
                 )
-                return json.loads(response.text)
+                parsed = json.loads(response.text)
+                return normalize_extracted_payload(parsed, data_type)
             except Exception as e:
                 last_err = e
-                logger.warning("Gemini model %s failed during vision extraction: %s; trying next model/key.", m, e)
+                logger.warning("Gemini model %s with schema failed (%s); trying without schema constraint.", m, e)
+                try:
+                    # 2. Fallback without rigid schema constraint
+                    response2 = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            client.models.generate_content,
+                            model=m,
+                            contents=[
+                                types.Part.from_bytes(data=content, mime_type=mime),
+                                vision_prompt + " Return strictly raw valid JSON."
+                            ],
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                temperature=0.0
+                            )
+                        ),
+                        timeout=20.0
+                    )
+                    parsed2 = json.loads(response2.text)
+                    return normalize_extracted_payload(parsed2, data_type)
+                except Exception as e2:
+                    last_err = e2
+                    logger.warning("Gemini model %s fallback failed: %s", m, e2)
 
     raise last_err
 
@@ -232,7 +310,7 @@ async def enqueue_extraction_task(
                     # Fallback to vision extraction if text extraction didn't produce rows or if no text layer
                     if (extracted_data is None or all(len(v) == 0 for v in extracted_data.values() if isinstance(v, list))) and client is not None and target_schema is not None:
                         try:
-                            extracted_data = await extract_via_gemini_vision(content, mime, target_schema)
+                            extracted_data = await extract_via_gemini_vision(content, mime, target_schema, data_type=data_type)
                         except Exception as vis_err:
                             logger.warning("Gemini vision extraction failed (%s); checking historical fallback.", vis_err)
 
@@ -241,9 +319,9 @@ async def enqueue_extraction_task(
                     try:
                         from app.services.llm_provider import call_groq
                         schema_templates = {
-                            "faculty": '{"faculty": [{"name": "Dr. Somesh Nandi", "department": "CSE (AIML)", "designation": "Associate Professor", "email": "someshnandi@rvce.edu.in", "cabin": "CSE-AIML R-102", "qualifications": "Ph.D. in ECE (VTU, 2024), M.Tech (PESIT, 2nd Rank)", "experience": "Associate Professor RVCE, Scientific Officer Cisco IoT CoE", "research_interests": ["AI/ML", "Deep Learning", "Integrated Photonics"], "subjects": ["Generative AI", "Artificial Neural Networks"], "publications": "IEEE Access Q1, Journal of Optics", "awards": "Light Excellence Award IEEE, 2nd Rank VTU", "responsibilities": "Coordinator CoE AI Research", "bio": "Over 8 years experience in AI/ML and Photonics."}]}',
+                            "faculty": '{"faculty": [{"name": "Faculty Full Name", "department": "AIML", "designation": "Assistant Professor / Associate Professor", "email": "email@rvce.edu.in", "cabin": "CSE-AIML R-102", "phone": "080-...", "qualifications": "Full educational qualifications, degrees, universities, years, ranks", "experience": "Full professional employment history, roles, institutions, dates", "research_interests": ["Topic 1", "Topic 2"], "subjects": ["Subject 1", "Subject 2"], "publications": "Journal papers, conferences, patents with titles", "projects": "Consultancy and sponsored research projects", "awards": "Awards, recognitions, memberships", "responsibilities": "Administrative responsibilities and roles", "bio": "Comprehensive biography and academic overview"}]}',
                             "timetable": '{"slots": [{"day": 1, "start_time": "09:00", "end_time": "10:00", "subject": "CS201", "subject_name": "Course Title", "faculty_name": "Faculty Name", "room": "Lab 1"}]}',
-                            "menu": '{"items": [{"day": null, "meal": "lunch", "item": "Dish Name", "price": 50, "is_veg": true}]}',
+                            "menu": '{"items": [{"day": null, "meal": "breakfast", "item": "Dish Name", "price": 40, "is_veg": true}]}',
                             "holidays": '{"holidays": [{"date": "2026-11-15", "name": "Holiday/Exam Name", "kind": "Academic"}]}'
                         }
                         sample_json = schema_templates.get(data_type, '{"records": [{"name": "Item", "description": "Details"}]}')
@@ -259,11 +337,12 @@ async def enqueue_extraction_task(
                             ],
                             temperature=0.0,
                             response_format_json=True,
-                            max_tokens=850,
-                            timeout_sec=12.0
+                            max_tokens=900,
+                            timeout_sec=14.0
                         )
                         if groq_res:
                             cand = json.loads(groq_res)
+                            cand = normalize_extracted_payload(cand, data_type)
                             for k in ("faculty", "slots", "items", "holidays"):
                                 if len(cand.get(k, [])) > 0:
                                     extracted_data = cand
@@ -284,19 +363,18 @@ async def enqueue_extraction_task(
                             )
                             for r in await cur.fetchall():
                                 cand = r.get("extracted")
-                                if isinstance(cand, dict):
-                                    for k in ("holidays", "items", "slots", "faculty"):
-                                        if len(cand.get(k, [])) > 0:
-                                            extracted_data = cand
-                                            logger.info("Used historical non-empty extraction for %s (%s rows)", data_type, len(cand[k]))
-                                            break
+                                cand = normalize_extracted_payload(cand, data_type)
+                                for k in ("holidays", "items", "slots", "faculty"):
+                                    if len(cand.get(k, [])) > 0:
+                                        extracted_data = cand
+                                        logger.info("Used historical non-empty extraction for %s (%s rows)", data_type, len(cand[k]))
+                                        break
                                 if extracted_data is not None:
                                     break
                     except Exception as hist_err:
                         logger.debug("Historical extraction fallback skipped: %s", hist_err)
 
                 if extracted_data is None:
-                    # Fallback / mock extraction for test harnesses
                     if data_type == "timetable":
                         extracted_data = {"slots": []}
                     elif data_type == "menu":
@@ -310,43 +388,44 @@ async def enqueue_extraction_task(
                     else:
                         extracted_data = {}
 
+                extracted_data = normalize_extracted_payload(extracted_data, data_type)
+
                 if data_type == "faculty" and isinstance(extracted_data, dict):
                     raw_content = text_layer.strip()
-                    if text_layer.strip():
-                        extracted_data["raw_text"] = text_layer
+                    if raw_content:
+                        extracted_data["raw_text"] = raw_content
 
-                    is_somesh = "somesh" in raw_content.lower() or "nandi" in raw_content.lower() or any("somesh" in str(f.get("name", "")).lower() for f in extracted_data.get("faculty", []))
-                    if is_somesh or len(extracted_data.get("faculty", [])) == 0:
-                        somesh_profile = {
-                            "name": "Dr. Somesh Nandi",
-                            "short_code": "SN",
-                            "department": "CSE (AIML)",
-                            "designation": "Associate Professor",
-                            "email": "someshnandi@rvce.edu.in",
-                            "phone": "080-6818 8278",
-                            "cabin": "CSE-AIML R-102",
-                            "qualifications": "Ph.D. in ECE (VTU, 2024 — Thesis: Analysis of Fiber and Waveguide Bragg Gratings for Sensor Applications), M.Tech in Intelligent Systems (PESIT/VTU, 2016, 2nd Rank VTU), B.E. in ECE (Basaveshwar Engg College/VTU, 2014, Distinction)",
-                            "experience": "Associate Professor at RVCE (May 2026–Present), Assistant Professor at RVCE (Feb 2022–May 2026), Scientific Officer Cisco IoT CoE (Nov 2018–Jan 2022), Assistant Professor at PES University (Aug 2016–Nov 2018), Avionics Intern at NAL (July 2015–June 2016)",
-                            "research_interests": ["Artificial Intelligence and Machine Learning", "Deep Learning", "Integrated Photonics", "Quantum Computing", "Sensors"],
-                            "subjects": ["Generative Artificial Intelligence", "Artificial Neural Networks and Deep Learning", "Digital Design and Computer Organization"],
-                            "publications": "9 Journal Publications (IEEE Access Q1, Journal of Optics Q2, Optoelectronics Letters), Book Chapters in Smart Innovation, 12 IEEE International Conference Publications, 3 Patents (Integrated Porter Robot, ORION Retail AI, GENESIS Urban Layout)",
-                            "projects": "Impact Damage Assessment of 3D Woven Composites (RVCE Seed Fund 4L), AI Pediatric Dental Health App (MR Ambedkar Dental College 2.5L), Teeth Root Resorption AI Model (0.5L)",
-                            "awards": "Light Excellence Award (IEEE Photonics Society), 2nd Rank in M.Tech from VTU, K-SET Exam Qualified for Assistant Professor, CNR Rao Merit Scholarship",
-                            "responsibilities": "Coordinator – Center of Excellence in AI Research and Business Solutions; Department Website Coordinator, TTO; Excom Member IEEE Photonics Society Bangalore Chapter",
-                            "bio": "Dr. Somesh Nandi is an Associate Professor in CSE (AIML), RVCE, with over 8 years of academic and research experience. Specializes in AI/ML, Deep Learning, Integrated Photonics and Sensors. Teaches Generative AI and Artificial Neural Networks. Authored numerous Q1 IEEE Access papers and 3 patents."
-                        }
-                        if is_somesh:
-                            extracted_data["faculty"] = [somesh_profile]
-                        elif len(extracted_data.get("faculty", [])) == 0 and raw_content:
-                            lines = [l.strip() for l in raw_content.split("\n") if l.strip()]
-                            detected_name = lines[0][:60] if lines else "Faculty Profile"
-                            extracted_data["faculty"] = [{
-                                "name": detected_name,
-                                "department": metadata.get("branch", "AIML"),
-                                "designation": "Faculty / Mentor",
-                                "email": "faculty@rvce.edu.in",
-                                "bio": " ".join(raw_content.split())[:1200]
-                            }]
+                    fac_list = extracted_data.get("faculty", [])
+                    if not fac_list and raw_content:
+                        import re
+                        lines = [l.strip() for l in raw_content.split("\n") if l.strip()]
+                        detected_name = lines[0][:80] if lines else "Faculty Member"
+                        for l in lines[:15]:
+                            clean_l = l.replace("--- PAGE 1 ---", "").strip()
+                            if any(clean_l.lower().startswith(p) for p in ("dr.", "dr ", "prof.", "prof ", "mr.", "ms.", "shri")):
+                                detected_name = clean_l[:80]
+                                break
+                        emails = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', raw_content)
+                        email_found = emails[0] if emails else ""
+                        phones = re.findall(r'(?:\+?91[\s-]?)?[0-9]{3,5}[\s-]?[0-9]{5,8}', raw_content)
+                        phone_found = phones[0] if phones else ""
+                        desig_found = "Assistant Professor"
+                        for d in ("associate professor", "assistant professor", "professor", "dean", "hod", "lecturer"):
+                            if d in raw_content.lower():
+                                desig_found = d.title()
+                                break
+                        cab_match = re.search(r'(?:cabin|room|lab)[\s:]*([A-Za-z0-9\s-]+)', raw_content, re.IGNORECASE)
+                        cab_found = cab_match.group(1).strip()[:30] if cab_match else "Department Faculty Room"
+
+                        extracted_data["faculty"] = [{
+                            "name": detected_name,
+                            "department": metadata.get("branch", "AIML"),
+                            "designation": desig_found,
+                            "email": email_found,
+                            "phone": phone_found,
+                            "cabin": cab_found,
+                            "bio": raw_content[:4000]
+                        }]
 
             # 2. Execute Deterministic Validators
             confidence_flags = await run_deterministic_validators(data_type, extracted_data, metadata)

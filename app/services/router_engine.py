@@ -115,6 +115,7 @@ RULES:
                 ],
                 temperature=0.0,
                 response_format_json=True,
+                max_tokens=150,
                 timeout_sec=4.0
             )
             if groq_res:
