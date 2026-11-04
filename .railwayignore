@@ -1,0 +1,8 @@
+frontend/
+frontend-next/
+node_modules/
+.git/
+.chat_extracted/
+__pycache__/
+*.docx
+uploads/
