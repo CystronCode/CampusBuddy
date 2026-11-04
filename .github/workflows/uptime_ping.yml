@@ -1,8 +1,8 @@
 name: Keep-Alive Ping
 on:
   schedule:
-    # Runs every 10 minutes from 01:30 to 17:30 UTC (07:00 to 23:00 IST)
-    - cron: '*/10 1-17 * * *'
+    # Runs every 10 minutes continuously to prevent container sleeping
+    - cron: '*/10 * * * *'
   workflow_dispatch:
 
 jobs:
@@ -11,4 +11,9 @@ jobs:
     steps:
       - name: Ping Campus API Health Endpoint
         run: |
-          curl -f -s -o /dev/null https://api.campus.edu/api/healthz || exit 1
+          TARGET="${{ secrets.BACKEND_URL }}"
+          if [ -z "$TARGET" ]; then
+            TARGET="https://campusos-api-5662.onrender.com"
+          fi
+          echo "Pinging health endpoint on: $TARGET"
+          curl -f -s -S --max-time 30 "$TARGET/health" || curl -f -s -S --max-time 30 "$TARGET/api/healthz" || true

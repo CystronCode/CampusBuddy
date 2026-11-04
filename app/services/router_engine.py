@@ -68,7 +68,7 @@ def normalize_query_for_cache(q: str) -> str:
 
 async def route_student_query(query_text: str, user_context: Dict[str, Any]) -> RouterContract:
     """
-    Tier 1 query router powered by Gemini Flash-Lite with 24-hour LRU caching.
+    Tier 1 query router powered by Groq LPU (Qwen 27B) with Gemini Flash fallback.
     Guarantees ZERO identity leakage (user_id, branch, year, section are absent from prompt).
     """
     cache_key = normalize_query_for_cache(query_text)
@@ -98,6 +98,35 @@ RULES:
 4. For multi-intent queries ('cheap veg lunch and free at 1?'), return multiple tool calls.
 """
 
+    # 1. Fast Groq LPU Router (sub-second latency)
+    if settings.GROQ_API_KEY:
+        try:
+            from app.services.llm_provider import call_groq
+            groq_prompt = (
+                f"{system_instruction}\n"
+                f'Student Query: "{query_text}"\n'
+                "Respond strictly with JSON schema: "
+                '{"calls": [{"tool": "name", "args": {...}}], "needs_clarification": false, "confidence": 0.95}'
+            )
+            groq_res = await call_groq(
+                messages=[
+                    {"role": "system", "content": "You are the Campus Intelligence Query Router. Output strictly valid JSON."},
+                    {"role": "user", "content": groq_prompt}
+                ],
+                temperature=0.0,
+                response_format_json=True,
+                timeout_sec=4.0
+            )
+            if groq_res:
+                parsed_data = json.loads(groq_res)
+                contract = RouterContract(**parsed_data)
+                if contract.confidence >= 0.7 and not contract.needs_clarification:
+                    router_cache[cache_key] = contract
+                return contract
+        except Exception as e:
+            logger.warning("Groq router error: %s, falling back to Gemini.", e)
+
+    # 2. Gemini Router Fallback
     clients = get_ai_clients()
     if clients:
         for client in clients:
@@ -128,7 +157,7 @@ RULES:
                 except Exception as e:
                     logger.warning("Router model %s failed/timed out (%s), trying next.", model_name, str(e))
 
-    # Offline/fallback rule-based router for testing environments
+    # 3. Offline/fallback rule-based router for testing environments
     calls = []
     q_lower = query_text.lower()
     if any(k in q_lower for k in ("menu", "lunch", "food", "breakfast", "snacks", "dinner", "price", "cost", "dosa", "idli", "idly", "vada", "coffee", "tea", "uttappa", "uttapam", "pongal", "upma", "meal", "canteen", "mess")):

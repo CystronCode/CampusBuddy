@@ -80,6 +80,9 @@ class Settings(BaseModel):
     GEMINI_MODEL_ROUTER: str = os.environ.get("GEMINI_MODEL_ROUTER", "gemini-3-flash-preview")
     GEMINI_MODEL_EXTRACT: str = os.environ.get("GEMINI_MODEL_EXTRACT", "gemini-3-flash-preview")
     GEMINI_MODEL_SYNTH: str = os.environ.get("GEMINI_MODEL_SYNTH", "gemini-3-flash-preview")
+    GROQ_API_KEY: str = os.environ.get("GROQ_API_KEY", "")
+    GROQ_MODEL: str = os.environ.get("GROQ_MODEL", "qwen/qwen3.8-27b")
+    LLM_PROVIDER: str = os.environ.get("LLM_PROVIDER", "groq")
     EMBEDDING_MODEL: str = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-001")
     RAG_MIN_SIMILARITY: float = float(os.environ.get("RAG_MIN_SIMILARITY", "0.45"))
     MAX_UPLOAD_BYTES: int = int(os.environ.get("MAX_UPLOAD_BYTES", str(10 * 1024 * 1024)))  # 10 MB

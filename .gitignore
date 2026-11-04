@@ -42,3 +42,6 @@ audit.zip
 # Operating System
 .DS_Store
 Thumbs.db
+
+# Chat extraction & temporary files
+.chat_extracted/

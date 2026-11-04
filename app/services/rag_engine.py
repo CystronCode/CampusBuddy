@@ -4,38 +4,13 @@ import asyncio
 import logging
 from typing import List, Dict, Any, Optional
 import numpy as np
-from google import genai
-from google.genai import types
 from app.core.config import settings
 from app.core.database import get_read_db
 from app.services.embedding_service import generate_l2_normalized_embeddings
+from app.services.llm_provider import generate_completion
 
 logger = logging.getLogger("campus.rag")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", settings.GEMINI_API_KEY)
-GEMINI_MODEL_SYNTH = settings.GEMINI_MODEL_SYNTH
 RAG_MIN_SIMILARITY = settings.RAG_MIN_SIMILARITY
-
-_genai_clients: List[genai.Client] = []
-CANDIDATE_MODELS = [
-    "gemini-flash-lite-latest",
-    "gemini-3-flash-preview",
-    "gemini-3.1-flash-lite-preview",
-]
-
-def get_genai_clients() -> List[genai.Client]:
-    global _genai_clients
-    if not _genai_clients:
-        for k in settings.GEMINI_API_KEYS:
-            if k and not k.startswith("mock"):
-                try:
-                    _genai_clients.append(genai.Client(api_key=k))
-                except Exception as e:
-                    logger.warning("Could not initialize genai.Client in RAG: %s", e)
-    return _genai_clients
-
-def get_genai_client() -> Optional[genai.Client]:
-    clients = get_genai_clients()
-    return clients[0] if clients else None
 
 # In-memory mock chunks store for offline testing
 _mock_chunks: List[Dict[str, Any]] = []
@@ -123,7 +98,7 @@ async def search_docs_hybrid(
 
 async def synthesize_rag_response(query_text: str, chunks: List[Dict[str, Any]]) -> str:
     """
-    Synthesize final response with Gemini Flash using strict markdown citations.
+    Synthesize final response with Groq (Qwen 27B) / Gemini Flash using strict markdown citations.
     Invariant: If 0 chunks match, synthesis LLM call is SKIPPED.
     """
     if not chunks:
@@ -148,23 +123,17 @@ Guidelines:
 3. If the context does not contain the complete answer, clearly state what information is missing.
 """
 
-    clients = get_genai_clients()
-    if clients:
-        for client in clients:
-            for model_name in CANDIDATE_MODELS:
-                try:
-                    response = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            client.models.generate_content,
-                            model=model_name,
-                            contents=[types.Part.from_text(text=prompt)],
-                            config=types.GenerateContentConfig(temperature=0.2)
-                        ),
-                        timeout=8.0,
-                    )
-                    return response.text
-                except Exception as e:
-                    logger.warning("RAG synthesis model %s failed/timed out: %s", model_name, e)
+    messages = [
+        {"role": "system", "content": "You are Campus Intelligence, an AI campus assistant answering queries strictly from context with verified citations."},
+        {"role": "user", "content": prompt}
+    ]
+
+    try:
+        ans = await generate_completion(messages=messages, temperature=0.2)
+        if ans and not ans.startswith("I am currently running in offline"):
+            return ans
+    except Exception as e:
+        logger.warning("Synthesis completion error: %s", e)
 
     # Deterministic fallback response for testing/offline environments
     c0 = chunks[0]
