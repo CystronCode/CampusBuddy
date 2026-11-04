@@ -139,6 +139,65 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
     }
   }
 
+  const [editingFaculty, setEditingFaculty] = useState<DataRecord | null>(null);
+  const [facultyDraft, setFacultyDraft] = useState({
+    name: "",
+    designation: "",
+    department: "",
+    email: "",
+    cabin: "",
+    office_hours: "",
+    qualifications: "",
+    experience: "",
+    subjects: "",
+    research_interests: "",
+    bio: "",
+  });
+  const [savingFaculty, setSavingFaculty] = useState(false);
+  const [facultySuccess, setFacultySuccess] = useState("");
+
+  function openFacultyEdit(fac: DataRecord) {
+    setEditingFaculty(fac);
+    setFacultyDraft({
+      name: String(fac.name || fac.full_name || ""),
+      designation: String(fac.designation || ""),
+      department: String(fac.department || fac.branch || ""),
+      email: String(fac.email || ""),
+      cabin: String(fac.office || fac.cabin || ""),
+      office_hours: String(fac.office_hours || ""),
+      qualifications: String(fac.qualifications || ""),
+      experience: String(fac.experience || ""),
+      subjects: Array.isArray(fac.subjects) ? fac.subjects.join(", ") : String(fac.subjects || ""),
+      research_interests: Array.isArray(fac.research_interests) ? fac.research_interests.join(", ") : String(fac.research_interests || ""),
+      bio: String(fac.bio || ""),
+    });
+    setEditError("");
+    setFacultySuccess("");
+  }
+
+  async function handleSaveFaculty(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingFaculty) return;
+    setSavingFaculty(true);
+    setEditError("");
+    const fid = String(editingFaculty.id || editingFaculty.code || editingFaculty.name);
+    try {
+      await api(`/v1/faculty/${encodeURIComponent(fid)}`, w.session, w.tenant, {
+        method: "PATCH",
+        body: JSON.stringify(facultyDraft),
+      });
+      setFacultySuccess(`Updated "${facultyDraft.name}" successfully`);
+      setTimeout(() => {
+        setEditingFaculty(null);
+        w.refresh();
+      }, 500);
+    } catch (err) {
+      setEditError((err as Error).message);
+    } finally {
+      setSavingFaculty(false);
+    }
+  }
+
   return (
     <>
       <div className="page-heading">
@@ -324,6 +383,7 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
             records={rows}
             kind={kind}
             onSource={w.download}
+            onEdit={page === "Faculty" && isAdmin ? (r) => openFacultyEdit(r) : undefined}
             limit={page === "Canteen" ? 12 : 8}
           />
           {page === "Canteen" && (
@@ -334,6 +394,175 @@ export function BrowseView({ w, page }: { w: Workspace; page: Page }) {
             </p>
           )}
         </>
+      )}
+
+      {/* Admin Faculty Correction Modal */}
+      {editingFaculty && (
+        <div className="ov on" style={{ zIndex: 100, display: "flex", padding: 20, alignItems: "center" }}>
+          <div
+            className="card"
+            style={{
+              width: "min(680px, 94vw)",
+              maxHeight: "88vh",
+              overflowY: "auto",
+              background: "#fff",
+              borderRadius: 20,
+              padding: 24,
+              boxShadow: "0 25px 60px rgba(15, 23, 42, 0.25)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div>
+                <span className="badge b-adm" style={{ marginBottom: 6 }}>Admin Faculty Correction</span>
+                <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>
+                  Edit Faculty Profile: {facultyDraft.name || "Faculty Member"}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingFaculty(null)}
+                style={{ background: "none", border: 0, fontSize: 20, cursor: "pointer", color: "var(--muted)" }}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            <ErrorBox message={editError} />
+            {facultySuccess && (
+              <div className="success" role="status" style={{ marginBottom: 14 }}>
+                {facultySuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveFaculty} style={{ display: "grid", gap: 14 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Full Name</label>
+                  <input
+                    className="field"
+                    value={facultyDraft.name}
+                    onChange={(e) => setFacultyDraft({ ...facultyDraft, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Designation</label>
+                  <input
+                    className="field"
+                    value={facultyDraft.designation}
+                    onChange={(e) => setFacultyDraft({ ...facultyDraft, designation: e.target.value })}
+                    placeholder="e.g. Associate Professor"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Department</label>
+                  <input
+                    className="field"
+                    value={facultyDraft.department}
+                    onChange={(e) => setFacultyDraft({ ...facultyDraft, department: e.target.value })}
+                    placeholder="e.g. AIML / CSE"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Email</label>
+                  <input
+                    className="field"
+                    type="email"
+                    value={facultyDraft.email}
+                    onChange={(e) => setFacultyDraft({ ...facultyDraft, email: e.target.value })}
+                    placeholder="e.g. vijayalakshmi@rvce.edu.in"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Cabin / Office Location</label>
+                  <input
+                    className="field"
+                    value={facultyDraft.cabin}
+                    onChange={(e) => setFacultyDraft({ ...facultyDraft, cabin: e.target.value })}
+                    placeholder="e.g. Faculty Room 204, Block B"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Office Hours</label>
+                  <input
+                    className="field"
+                    value={facultyDraft.office_hours}
+                    onChange={(e) => setFacultyDraft({ ...facultyDraft, office_hours: e.target.value })}
+                    placeholder="e.g. Mon-Fri 10:00 - 16:00"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Qualifications</label>
+                <input
+                  className="field"
+                  value={facultyDraft.qualifications}
+                  onChange={(e) => setFacultyDraft({ ...facultyDraft, qualifications: e.target.value })}
+                  placeholder="e.g. Ph.D. in Computer Science, MCA"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Experience</label>
+                <textarea
+                  className="field"
+                  rows={2}
+                  value={facultyDraft.experience}
+                  onChange={(e) => setFacultyDraft({ ...facultyDraft, experience: e.target.value })}
+                  placeholder="e.g. Over 25 years of teaching and research experience..."
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Subjects / Courses Taught</label>
+                <input
+                  className="field"
+                  value={facultyDraft.subjects}
+                  onChange={(e) => setFacultyDraft({ ...facultyDraft, subjects: e.target.value })}
+                  placeholder="e.g. DBMS, Natural Language Processing, AI"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Research Interests (comma separated)</label>
+                <input
+                  className="field"
+                  value={facultyDraft.research_interests}
+                  onChange={(e) => setFacultyDraft({ ...facultyDraft, research_interests: e.target.value })}
+                  placeholder="e.g. Data Mining, Machine Learning, Deep Learning"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>Profile Summary / Bio</label>
+                <textarea
+                  className="field"
+                  rows={3}
+                  value={facultyDraft.bio}
+                  onChange={(e) => setFacultyDraft({ ...facultyDraft, bio: e.target.value })}
+                  placeholder="Brief academic biography..."
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 8 }}>
+                <Button type="button" variant="outline" onClick={() => setEditingFaculty(null)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={savingFaculty}>
+                  {savingFaculty ? "Saving…" : "Save Changes"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </>
   );
@@ -358,10 +587,15 @@ function WeekGrid({
   });
   return (
     <div className="calendar-grid">
-      {dates.map((d) => {
-        const rows = records.filter((r) =>
-          String(r.start || r.date).startsWith(d),
-        );
+      {dates.map((d, dayIndex) => {
+        const rows = records.filter((r) => {
+          if (String(r.start || r.date).startsWith(d)) return true;
+          if (r.day !== undefined && r.day !== null) {
+            const dNum = Number(r.day);
+            if (dNum === dayIndex + 1) return true;
+          }
+          return false;
+        });
         return (
           <section key={d} className="calendar-day" aria-label={prettyDate(d)}>
             <h3>{prettyDate(d)}</h3>

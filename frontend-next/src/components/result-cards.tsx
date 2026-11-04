@@ -45,10 +45,12 @@ export function RecordCard({
   record: r,
   kind,
   onSource,
+  onEdit,
 }: {
   record: DataRecord;
   kind: string;
   onSource?: (id: string) => void;
+  onEdit?: (record: DataRecord) => void;
 }) {
   const timeRange = (a: unknown, b: unknown) =>
     `${text(a).includes("T") ? text(a).split("T")[1].slice(0, 5) : text(a).slice(0, 5)} – ${text(b).includes("T") ? text(b).split("T")[1].slice(0, 5) : text(b).slice(0, 5)}`;
@@ -330,6 +332,18 @@ export function RecordCard({
       className={`record-card ${kind === "classes" ? "class-card" : ""}`}
     >
       {content}
+      {onEdit && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid var(--line)", display: "flex", justifyContent: "flex-end" }}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onEdit(r)}
+          >
+            <Pencil size={12} /> Edit {kind === "faculty" ? "Faculty" : "Details"}
+          </Button>
+        </div>
+      )}
       <footer>
         {(r.demo || nestedDemo) && <DemoBadge />}
         {source && onSource && (
@@ -931,11 +945,13 @@ export function RecordList({
   records,
   kind,
   onSource,
+  onEdit,
   limit = 8,
 }: {
   records: DataRecord[];
   kind: string;
   onSource?: (id: string) => void;
+  onEdit?: (record: DataRecord) => void;
   limit?: number;
 }) {
   if (!records.length) return <Empty />;
@@ -951,6 +967,7 @@ export function RecordList({
             record={r}
             kind={kind}
             onSource={onSource}
+            onEdit={onEdit}
           />
         ))}
       </div>
@@ -964,6 +981,7 @@ export function RecordList({
                 record={r}
                 kind={kind}
                 onSource={onSource}
+                onEdit={onEdit}
               />
             ))}
           </div>

@@ -27,6 +27,7 @@ import {
   prettyDate,
   text,
   type Profile,
+  type DataRecord,
   type Membership,
   type Overview,
 } from "@/lib/api";
@@ -635,6 +636,14 @@ export function CampusApp() {
 
   const navigate = useCallback(
     (next: Page) => {
+      if (admin && next === "Settings") {
+        setPage("Home");
+        return;
+      }
+      if (admin && next === "Canteen") {
+        setPage("Menu Manager");
+        return;
+      }
       if (
         !admin &&
         (next === "Admin Console" ||
@@ -768,7 +777,7 @@ export function CampusApp() {
     ["Home", "Home", "i-home"],
     ["Ask CampusOS", "Ask CampusOS", "i-ai"],
     ["Timetable", "Timetable", "i-cal"],
-    ["Canteen", "Canteen", "i-food"],
+    ...(!admin ? [["Canteen", "Canteen", "i-food"] as [Page, string, string]] : []),
     ["Notices", "Notices", "i-bell"],
   ];
 
@@ -776,7 +785,7 @@ export function CampusApp() {
     ["Events", "Events", "i-evt"],
     ["Faculty", "Faculty", "i-user"],
     ["Calendar", "Calendar", "i-cal"],
-    ["Settings", "Settings", "i-gear"],
+    ...(!admin ? [["Settings", "Settings", "i-gear"] as [Page, string, string]] : []),
   ];
 
   const bottomItems: [Page, string, string][] = [
@@ -1039,9 +1048,23 @@ export function CampusApp() {
                 </div>
               )
             ) : page === "Menu Manager" ? (
-              <MenuManagerView showToast={showToast} navigate={navigate} />
+              <MenuManagerView w={w} showToast={showToast} navigate={navigate} />
             ) : page === "Settings" ? (
-              <SettingsView w={w} />
+              admin ? (
+                <div className="card" style={{ textAlign: "center", padding: "48px 24px" }}>
+                  <ShieldCheck size={40} color="#047857" style={{ margin: "0 auto 16px" }} />
+                  <h2 style={{ fontSize: 20 }}>Student Preferences Only</h2>
+                  <p className="mute" style={{ maxWidth: 460, margin: "12px auto 24px", lineHeight: 1.6 }}>
+                    Personal student preferences (diet, academic interests, and calendar integrations) are only
+                    configured on student accounts. Administrative controls are managed through the Admin Console and Menu Manager.
+                  </p>
+                  <button className="btn" onClick={() => setPage("Home")}>
+                    Return to Home
+                  </button>
+                </div>
+              ) : (
+                <SettingsView w={w} />
+              )
             ) : page === "More" ? (
               <MoreView admin={admin} navigate={navigate} />
             ) : (
@@ -1730,27 +1753,90 @@ const INITIAL_FOOD: [string, number, boolean, number, string, boolean][] = [
 ];
 
 function MenuManagerView({
+  w,
   showToast,
   navigate,
 }: {
+  w: Workspace;
   showToast: (msg: string) => void;
   navigate: (p: Page) => void;
 }) {
-  const [items, setItems] = useState(INITIAL_FOOD);
+  const { data, error, loading } = useRemote<DataRecord[]>("/v1/menu?budget=9999", w);
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
-  const [protein, setProtein] = useState("");
+  const [meal, setMeal] = useState("lunch");
   const [isVeg, setIsVeg] = useState(true);
+  const [query, setQuery] = useState("");
+  const [filterMeal, setFilterMeal] = useState("all");
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+
+  const items = Array.isArray(data) ? data : [];
+  const filtered = items.filter((it) => {
+    if (filterMeal !== "all" && String(it.meal || it.category).toLowerCase() !== filterMeal.toLowerCase()) {
+      return false;
+    }
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      const n = String(it.name || it.item || "").toLowerCase();
+      const m = String(it.meal || it.category || "").toLowerCase();
+      if (!n.includes(q) && !m.includes(q)) return false;
+    }
+    return true;
+  });
+
+  async function handleDelete(itemId: string, itemName: string) {
+    if (!window.confirm(`Delete "${itemName}" from canteen menu? This will immediately remove it from the student interface.`)) {
+      return;
+    }
+    setActionError("");
+    try {
+      await api(`/v1/menu/${encodeURIComponent(itemId)}`, w.session, w.tenant, {
+        method: "DELETE",
+      });
+      showToast(`Deleted "${itemName}" from canteen`);
+      w.refresh();
+    } catch (e) {
+      setActionError((e as Error).message);
+    }
+  }
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !price) return;
+    setBusy(true);
+    setActionError("");
+    try {
+      await api("/v1/menu", w.session, w.tenant, {
+        method: "POST",
+        body: JSON.stringify({
+          item: name.trim(),
+          price: Number(price),
+          meal,
+          is_veg: isVeg,
+          facility: "Main Mess & Canteen",
+        }),
+      });
+      setName("");
+      setPrice("");
+      showToast(`Added "${name.trim()}" to canteen menu`);
+      w.refresh();
+    } catch (e) {
+      setActionError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
         <div>
           <h1 className="h1" style={{ marginBottom: 6 }}>
-            Menu Manager
+            Canteen Menu Manager
           </h1>
           <p className="mute" style={{ margin: 0 }}>
-            Price and availability changes show up in the student canteen right away.
+            Manage all campus food items. Every addition and deletion is instantly live and synchronized with the student interface.
           </p>
         </div>
         <button
@@ -1762,133 +1848,155 @@ function MenuManagerView({
         </button>
       </div>
 
-      <form
-        className="card addf"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!name.trim() || !price) return;
-          setItems((prev) => [
-            [name.trim(), Number(price), isVeg, Number(protein) || 0, "Special", true],
-            ...prev,
-          ]);
-          setName("");
-          setPrice("");
-          setProtein("");
-          showToast("Added to the student canteen");
-        }}
-      >
-        <input
-          className="field"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Dish name"
-          required
-        />
-        <input
-          className="field"
-          type="number"
-          min="10"
-          max="500"
-          value={price}
-          onChange={(e) => setPrice(e.target.value)}
-          placeholder="Price in ₹"
-          required
-          style={{ maxWidth: 130 }}
-        />
-        <input
-          className="field"
-          type="number"
-          min="0"
-          max="80"
-          value={protein}
-          onChange={(e) => setProtein(e.target.value)}
-          placeholder="Protein (g)"
-          style={{ maxWidth: 130 }}
-        />
-        <div className="switch">
-          <button
-            type="button"
-            className={isVeg ? "on" : ""}
-            onClick={() => setIsVeg(true)}
-          >
-            Veg
-          </button>
-          <button
-            type="button"
-            className={!isVeg ? "on" : ""}
-            onClick={() => setIsVeg(false)}
-          >
-            Non-veg
-          </button>
-        </div>
-        <button className="btn" type="submit">
-          Add dish
-        </button>
-      </form>
+      <ErrorBox message={error || actionError} />
 
-      <div>
-        {items.map((f, i) => (
-          <div className={`mrow ${!f[5] ? "off" : ""}`} key={`${f[0]}-${i}`}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-              <span className={f[2] ? "veg" : "nv"} />
-              <div>
-                <div style={{ fontWeight: 700 }}>{f[0]}</div>
-                <div className="mute">
-                  {f[4]} · {f[3]}g protein
-                </div>
-              </div>
-            </div>
-            <div className="stepper">
-              <button
-                type="button"
-                aria-label="Lower price"
-                onClick={() =>
-                  setItems((prev) =>
-                    prev.map((row, idx) =>
-                      idx === i ? [row[0], Math.max(10, row[1] - 5), row[2], row[3], row[4], row[5]] : row,
-                    ),
-                  )
-                }
-              >
-                −
-              </button>
-              <span className="mono" style={{ minWidth: 52, textAlign: "center" }}>
-                ₹{f[1]}
-              </span>
-              <button
-                type="button"
-                aria-label="Raise price"
-                onClick={() =>
-                  setItems((prev) =>
-                    prev.map((row, idx) =>
-                      idx === i ? [row[0], row[1] + 5, row[2], row[3], row[4], row[5]] : row,
-                    ),
-                  )
-                }
-              >
-                +
-              </button>
-            </div>
+      {/* Add New Food Item Form */}
+      <div className="card" style={{ marginBottom: 20, padding: "18px 20px" }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, margin: "0 0 12px" }}>Add New Dish to Canteen</h3>
+        <form
+          onSubmit={handleAdd}
+          style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}
+        >
+          <input
+            className="field"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Dish name (e.g. Masala Dosa, Paneer Rice)"
+            required
+            style={{ flex: "2 1 200px" }}
+          />
+          <input
+            className="field"
+            type="number"
+            min="5"
+            max="1000"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            placeholder="Price (₹)"
+            required
+            style={{ flex: "1 1 110px", maxWidth: 130 }}
+          />
+          <select
+            className="field"
+            value={meal}
+            onChange={(e) => setMeal(e.target.value)}
+            style={{ flex: "1 1 120px", maxWidth: 140 }}
+          >
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="snacks">Snacks</option>
+            <option value="dinner">Dinner</option>
+          </select>
+          <div className="switch">
             <button
               type="button"
-              className={`tog ${f[5] ? "on" : ""}`}
-              aria-label="Toggle availability"
-              title={f[5] ? "Available" : "Sold out"}
-              onClick={() => {
-                const nextAvail = !f[5];
-                setItems((prev) =>
-                  prev.map((row, idx) =>
-                    idx === i ? [row[0], row[1], row[2], row[3], row[4], nextAvail] : row,
-                  ),
-                );
-                showToast(
-                  `${f[0]}${nextAvail ? " is available again" : " marked sold out"}`,
-                );
-              }}
-            />
+              className={isVeg ? "on" : ""}
+              onClick={() => setIsVeg(true)}
+            >
+              Veg
+            </button>
+            <button
+              type="button"
+              className={!isVeg ? "on" : ""}
+              onClick={() => setIsVeg(false)}
+            >
+              Non-veg
+            </button>
           </div>
-        ))}
+          <button className="btn" type="submit" disabled={busy}>
+            {busy ? "Adding…" : "+ Add Dish"}
+          </button>
+        </form>
       </div>
+
+      {/* Filter and Item Count Bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 14 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontWeight: 700, fontSize: 14 }}>
+            Active Canteen Dishes ({filtered.length})
+          </span>
+          <div className="switch" style={{ marginLeft: 8 }}>
+            {(["all", "breakfast", "lunch", "snacks", "dinner"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                className={filterMeal === m ? "on" : ""}
+                onClick={() => setFilterMeal(m)}
+              >
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+        <input
+          className="field"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter dishes…"
+          style={{ maxWidth: 220, padding: "7px 12px", fontSize: 13 }}
+        />
+      </div>
+
+      {loading ? (
+        <Loading />
+      ) : filtered.length ? (
+        <div style={{ display: "grid", gap: 10 }}>
+          {filtered.map((item, idx) => {
+            const isItemVeg = item.vegetarian ?? item.is_veg ?? true;
+            const itemId = String(item.id || item.item || item.name || idx);
+            const itemName = String(item.name || item.item || "Dish");
+            const itemPrice = text(item.price);
+            const itemMeal = String(item.category || item.meal || "Lunch");
+
+            return (
+              <div
+                className="mrow"
+                key={itemId}
+                style={{
+                  gridTemplateColumns: "1fr auto auto",
+                  alignItems: "center",
+                  padding: "14px 18px",
+                  background: "#fff",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                  <span className={isItemVeg ? "veg-badge" : "nonveg-badge"}>
+                    {isItemVeg ? "Veg" : "Non-Veg"}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: "var(--foreground)" }}>
+                      {itemName}
+                    </div>
+                    <div className="mute" style={{ fontSize: 12 }}>
+                      {itemMeal} · {item.protein ? `${item.protein}g protein` : "Standard nutrition"}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ fontWeight: 800, fontSize: 16, color: "var(--foreground)", padding: "0 14px" }}>
+                  ₹{itemPrice}
+                </div>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleDelete(itemId, itemName)}
+                  style={{ color: "#ef4444", borderColor: "#fecaca" }}
+                  title={`Delete ${itemName} from canteen`}
+                >
+                  Delete
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <Empty
+          message="No matching food items found"
+          hint="Try clearing search filters or upload a menu PDF via the Admin Console."
+        />
+      )}
     </section>
   );
 }

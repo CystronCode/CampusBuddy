@@ -73,6 +73,7 @@ export function AdminView({
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("imports");
+  const [jobFilter, setJobFilter] = useState("all");
   const system = useRemote<SystemInfo>("/v1/admin/system", w);
   const jobs = useRemote<Job[]>("/v1/ingestion", w);
   useEffect(() => {
@@ -614,24 +615,111 @@ export function AdminView({
                 </section>
               )}
               <section className="panel section-gap">
-                <h2>Recent imports</h2>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0 }}>Recent Imports by Document Type</h2>
+                    <p className="subtle" style={{ margin: "4px 0 0", fontSize: 12.5 }}>
+                      Review uploaded campus documents grouped and tagged by extraction category.
+                    </p>
+                  </div>
+                  <div className="switch" style={{ flexWrap: "wrap" }}>
+                    {[
+                      { id: "all", label: `All (${jobs.data?.length ?? 0})` },
+                      { id: "timetable", label: `Timetables (${jobs.data?.filter(j => j.data_type === "timetable").length ?? 0})` },
+                      { id: "faculty", label: `Faculty (${jobs.data?.filter(j => j.data_type === "faculty").length ?? 0})` },
+                      { id: "menu", label: `Menus (${jobs.data?.filter(j => j.data_type === "menu").length ?? 0})` },
+                      { id: "notices", label: `Notices (${jobs.data?.filter(j => ["notices", "circular"].includes(j.data_type || "")).length ?? 0})` },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        type="button"
+                        className={jobFilter === f.id ? "on" : ""}
+                        onClick={() => setJobFilter(f.id)}
+                        style={{ fontSize: 12, padding: "5px 11px" }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 {jobs.data?.length ? (
-                  jobs.data.map((j) => (
-                    <div className="job-row" key={j.id}>
-                      <div>
-                        <strong style={{ fontSize: 13 }}>
-                          {j.status} · {prettyDate(j.created_at)}
-                        </strong>
-                        <p>
-                          {j.error ||
-                            `${j.preview.valid_count ?? j.preview.imported_count ?? "Document"} records · ${j.attempts} processing attempt(s)`}
-                        </p>
+                  (() => {
+                    const filtered = jobs.data.filter((j) => {
+                      if (jobFilter === "all") return true;
+                      if (jobFilter === "notices") return ["notices", "circular"].includes(j.data_type || "");
+                      return j.data_type === jobFilter;
+                    });
+
+                    if (!filtered.length) {
+                      return (
+                        <div className="mute" style={{ padding: "20px 0", textAlign: "center" }}>
+                          No imports found for this category.
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div style={{ display: "grid", gap: 10 }}>
+                        {filtered.map((j) => {
+                          const dt = (j.data_type || "document").toLowerCase();
+                          let typeBadge = <span className="badge">📄 Document</span>;
+                          if (dt === "timetable") {
+                            typeBadge = <span className="badge b-adm">📅 Timetable</span>;
+                          } else if (dt === "faculty") {
+                            typeBadge = <span className="badge" style={{ background: "#f3e8ff", color: "#7e22ce", borderColor: "#d8b4fe" }}>👨‍🏫 Faculty Directory</span>;
+                          } else if (dt === "menu") {
+                            typeBadge = <span className="badge" style={{ background: "#fef3c7", color: "#b45309", borderColor: "#fde68a" }}>🍽️ Canteen Menu</span>;
+                          } else if (dt === "notices" || dt === "circular") {
+                            typeBadge = <span className="badge b-stu">📢 Notice / Circular</span>;
+                          } else if (dt === "calendar" || dt === "events") {
+                            typeBadge = <span className="badge" style={{ background: "#e0f2fe", color: "#0369a1", borderColor: "#bae6fd" }}>🗓️ Calendar</span>;
+                          }
+
+                          const statusBadge = j.status === "completed"
+                            ? <span className="badge b-adm" style={{ fontSize: 10 }}>Approved</span>
+                            : j.status === "preview"
+                              ? <span className="badge b-stu" style={{ fontSize: 10 }}>Ready to Review</span>
+                              : <span className="badge" style={{ fontSize: 10 }}>{j.status}</span>;
+
+                          return (
+                            <div
+                              className="job-row"
+                              key={j.id}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 14,
+                                padding: "14px 18px",
+                                background: "#fff",
+                                borderRadius: 12,
+                                border: "1px solid var(--line)",
+                              }}
+                            >
+                              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, minWidth: 0, flex: 1 }}>
+                                <div style={{ marginTop: 2 }}>{typeBadge}</div>
+                                <div>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                                    <strong style={{ fontSize: 13.5, color: "var(--foreground)" }}>
+                                      {j.preview.valid_count ?? j.preview.imported_count ?? "Document"} records extracted
+                                    </strong>
+                                    {statusBadge}
+                                  </div>
+                                  <p className="mute" style={{ fontSize: 12, margin: 0 }}>
+                                    Imported {prettyDate(j.created_at)} · {j.error || `${j.attempts} processing attempt(s)`}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button variant="outline" size="sm" onClick={() => selectJob(j)}>
+                                Review & Confirm
+                              </Button>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <Button variant="ghost" onClick={() => selectJob(j)}>
-                        Review
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })()
                 ) : (
                   <Empty
                     message="No imports yet"

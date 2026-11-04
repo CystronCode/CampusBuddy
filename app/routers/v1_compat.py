@@ -299,7 +299,10 @@ def _format_slot(s: Dict[str, Any], target_date: Optional[date] = None) -> Dict[
         day_num = day_map.get(str(raw_day).lower()[:3], 1)
     if day_num < 1 or day_num > 7:
         day_num = 1
-    dt_str = str(target_date or datetime.now(IST).date())
+    ref_date = target_date or datetime.now(IST).date()
+    monday = ref_date - timedelta(days=ref_date.isoweekday() - 1)
+    slot_date = monday + timedelta(days=day_num - 1)
+    dt_str = str(slot_date)
     st = str(s.get("start_time", "09:00"))[:5]
     et = str(s.get("end_time", "10:00"))[:5]
     subj_code = str(s.get("subject_code") or s.get("subject") or "Course").strip()
@@ -660,7 +663,47 @@ async def v1_menu(
         res.sort(key=lambda x: -x["protein_g"])
     else:
         res.sort(key=lambda x: x["price"])
-    return res[:60]
+    return res[:120]
+
+
+class V1MenuItemCreate(BaseModel):
+    item: str
+    price: float = 30.0
+    meal: str = "lunch"
+    is_veg: bool = True
+    facility: Optional[str] = "Main Mess & Canteen"
+
+
+@router.post("/menu")
+async def v1_create_menu_item(body: V1MenuItemCreate, request: Request):
+    _require_admin(request)
+    from app.services.cache_service import evict_scope_cache
+    async with get_write_db() as conn:
+        cur = await conn.execute(
+            """INSERT INTO menu_items (facility, day_of_week, meal, item_name, price, is_veg, version)
+               VALUES (%s, 'daily', %s, %s, %s, %s, 1)
+               RETURNING *""",
+            (body.facility or "Main Mess & Canteen", body.meal.lower().strip(), body.item.strip(), body.price, body.is_veg),
+        )
+        created = dict(await cur.fetchone())
+        await conn.execute("UPDATE data_versions SET rev = rev + 1, updated_at = now() WHERE scope = 'menu:mess'")
+        evict_scope_cache("menu:mess")
+        return _format_menu(created)
+
+
+@router.delete("/menu/{item_id}")
+async def v1_delete_menu_item(item_id: str, request: Request):
+    _require_admin(request)
+    from app.services.cache_service import evict_scope_cache
+    async with get_write_db() as conn:
+        try:
+            int_id = int(item_id)
+            await conn.execute("DELETE FROM menu_items WHERE id = %s", (int_id,))
+        except ValueError:
+            await conn.execute("DELETE FROM menu_items WHERE id::text = %s OR lower(item_name) = lower(%s)", (item_id, item_id))
+        await conn.execute("UPDATE data_versions SET rev = rev + 1, updated_at = now() WHERE scope = 'menu:mess'")
+        evict_scope_cache("menu:mess")
+    return {"deleted": True, "id": item_id}
 
 
 @router.get("/meals")
@@ -804,6 +847,77 @@ async def v1_faculty(query: str = ""):
         if not q or q in searchable or any(tok in searchable for tok in q.split() if len(tok) > 2):
             res.append(item)
     return res
+
+
+class V1FacultyUpdate(BaseModel):
+    name: Optional[str] = None
+    designation: Optional[str] = None
+    department: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    cabin: Optional[str] = None
+    office_hours: Optional[str] = None
+    qualifications: Optional[str] = None
+    experience: Optional[str] = None
+    research_interests: Optional[Any] = None
+    subjects: Optional[Any] = None
+    bio: Optional[str] = None
+
+
+@router.patch("/faculty/{faculty_id}")
+async def v1_update_faculty(faculty_id: str, body: V1FacultyUpdate, request: Request):
+    _require_admin(request)
+    from app.services.cache_service import evict_scope_cache
+    async with get_write_db() as conn:
+        cur = await conn.execute(
+            """SELECT * FROM faculty WHERE id::text = %s OR short_code = %s OR lower(name) = lower(%s)""",
+            (faculty_id, faculty_id, faculty_id),
+        )
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Faculty member not found")
+
+        row_d = dict(row)
+        name_val = body.name.strip() if body.name is not None else (row_d.get("name") or row_d.get("full_name"))
+        desig_val = body.designation.strip() if body.designation is not None else row_d.get("designation")
+        dept_val = body.department.strip() if body.department is not None else (row_d.get("department") or row_d.get("branch"))
+        email_val = body.email.strip() if body.email is not None else row_d.get("email")
+        cabin_val = body.cabin.strip() if body.cabin is not None else row_d.get("cabin")
+        hours_val = body.office_hours.strip() if body.office_hours is not None else row_d.get("office_hours")
+
+        subjs_list = row_d.get("subjects") or []
+        if body.subjects is not None:
+            if isinstance(body.subjects, list):
+                subjs_list = [s.strip() for s in body.subjects if str(s).strip()]
+            else:
+                subjs_list = [s.strip() for s in str(body.subjects).split(",") if s.strip()]
+
+        extra_parts = []
+        if body.qualifications:
+            extra_parts.append(f"Qualifications: {body.qualifications.strip()}")
+        if body.experience:
+            extra_parts.append(f"Experience: {body.experience.strip()}")
+        if body.research_interests:
+            ri = ", ".join(body.research_interests) if isinstance(body.research_interests, list) else str(body.research_interests).strip()
+            extra_parts.append(f"Research Interests: {ri}")
+        if body.bio:
+            extra_parts.append(f"Bio: {body.bio.strip()}")
+        new_subj_text = " | ".join(extra_parts) if extra_parts else row_d.get("subjects_text")
+
+        await conn.execute(
+            """UPDATE faculty
+               SET name = %s, full_name = %s, designation = %s, department = %s, branch = %s,
+                   email = %s, cabin = %s, office_hours = %s, subjects = %s::jsonb,
+                   subjects_text = %s
+               WHERE id = %s""",
+            (name_val, name_val, desig_val, dept_val, dept_val, email_val, cabin_val, hours_val, json.dumps(subjs_list), new_subj_text, row_d["id"]),
+        )
+        await conn.execute("""UPDATE data_versions SET rev = rev + 1, updated_at = now() WHERE scope = 'faculty:all'""")
+        evict_scope_cache("faculty:all")
+
+        cur = await conn.execute("SELECT * FROM faculty WHERE id = %s", (row_d["id"],))
+        updated = dict(await cur.fetchone())
+        return _format_faculty(updated)
 
 
 @router.get("/notices")
