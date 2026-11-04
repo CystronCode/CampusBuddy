@@ -84,8 +84,8 @@ def parse_docx_sync(content: bytes) -> str:
     return "\n".join(paragraphs)
 
 CANDIDATE_MODELS = list(dict.fromkeys([
+    "gemini-3-flash-preview",  # verified for timetable/table vision extraction
     GEMINI_MODEL_EXTRACT,
-    "gemini-3-flash-preview",
     "gemini-3.5-flash",
     "gemini-flash-latest",
     "gemini-flash-lite-latest",
