@@ -771,7 +771,7 @@ body.admin .av {
 
 /* Admin Bento KPI & Review Widgets */
 .k {
-  grid-column: span 3;
+  grid-column: span 6;
 }
 .rev {
   grid-column: span 7;

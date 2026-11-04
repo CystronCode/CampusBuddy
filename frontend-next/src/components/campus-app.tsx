@@ -1266,21 +1266,9 @@ function HomeView({
             <span className="badge b-adm">+3 today</span>
           </div>
           <div className="card k">
-            <div className="mute">Canteen orders today</div>
-            <div className="kv">1,942</div>
-            <span className="badge b-adm">+12% vs last Monday</span>
-          </div>
-          <div className="card k">
             <div className="mute">Active students</div>
             <div className="kv">4,310</div>
             <span className="badge b-adm">96% of roll</span>
-          </div>
-          <div className="card k">
-            <div className="mute">Campus attendance · target 85%</div>
-            <div className="kv">91.2%</div>
-            <div className="bar">
-              <i style={{ width: "91.2%", background: "linear-gradient(90deg,#047857,#10b981)" }} />
-            </div>
           </div>
 
           <div className="card rev">
