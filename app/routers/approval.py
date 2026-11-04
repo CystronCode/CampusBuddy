@@ -517,7 +517,7 @@ async def patch_submission(submission_id: str, payload: PatchSubmissionRequest, 
                        confidence = %s,
                        updated_at = now()
                    WHERE id = %s""",
-                (json.dumps(payload.extracted), json.dumps(val_report), submission_id)
+                (json.dumps(payload.extracted, default=str), json.dumps(val_report, default=str), submission_id)
             )
     except Exception as exc:
         sub["extracted"] = payload.extracted

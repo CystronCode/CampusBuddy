@@ -1472,7 +1472,7 @@ async def v1_ingestion_update_records(job_id: str, body: V1ConfirmInput, request
 
         await conn.execute(
             "UPDATE submissions SET extracted = %s::jsonb WHERE id = %s",
-            (json.dumps(ext_payload), job_id),
+            (json.dumps(ext_payload, default=str), job_id),
         )
         cur2 = await conn.execute(
             "SELECT id, file_id, data_type, scope, status, extracted, error, created_at FROM submissions WHERE id = %s",
@@ -1610,7 +1610,7 @@ async def v1_ingestion_confirm(job_id: str, request: Request):
                        SET extracted = %s::jsonb, 
                            confidence = '{\"cells\": {}, \"has_errors\": false, \"has_warnings\": false}'::jsonb 
                        WHERE id = %s""",
-                    (json.dumps(ext), job_id),
+                    (json.dumps(ext, default=str), job_id),
                 )
 
     await approve_submission(job_id, request)

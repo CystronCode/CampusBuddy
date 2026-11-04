@@ -85,8 +85,9 @@ def parse_docx_sync(content: bytes) -> str:
 
 CANDIDATE_MODELS = [
     "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-3-flash-preview",
     "gemini-flash-latest",
+    "gemini-3.1-flash-lite",
 ]
 
 def normalize_extracted_payload(cand: Any, data_type: str) -> Dict[str, Any]:
@@ -440,7 +441,7 @@ async def enqueue_extraction_task(
                                confidence = %s,
                                updated_at = now()
                            WHERE id = %s""",
-                        (json.dumps(extracted_data), json.dumps(confidence_flags), submission_id)
+                        (json.dumps(extracted_data, default=str), json.dumps(confidence_flags, default=str), submission_id)
                     )
             except Exception as db_err:
                 logger.warning("DB update to draft failed: %s", db_err)
