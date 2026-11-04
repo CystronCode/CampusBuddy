@@ -1082,10 +1082,11 @@ async def _process_v1_chat(body: V1ChatInput, user: Dict[str, Any]) -> Dict[str,
                 parts.append(f"Found {len(hols)} calendar dates.")
             elif tname == "get_faculty":
                 facs = r.get("matches") or r.get("faculty", [])
-                fac_summaries = []
+                formatted_fac_list = []
                 for i, f in enumerate(facs[:8]):
                     formatted_fac = _format_faculty(f, i)
                     records.append(formatted_fac)
+                    formatted_fac_list.append(formatted_fac)
                     if formatted_fac.get("source_id") and formatted_fac["source_id"] not in seen_source_ids:
                         seen_source_ids.add(formatted_fac["source_id"])
                         sources.append({
@@ -1095,37 +1096,54 @@ async def _process_v1_chat(body: V1ChatInput, user: Dict[str, Any]) -> Dict[str,
                             "created_at": datetime.now(IST).isoformat(),
                             "url": "",
                         })
-                    details = [f"**{formatted_fac['name']}** ({formatted_fac['designation']}, {formatted_fac['department']})"]
-                    if formatted_fac.get("contact"):
-                        details.append(f"Contact: {formatted_fac['contact']}")
-                    if formatted_fac.get("office") and formatted_fac["office"] != "Department Faculty Room":
-                        details.append(f"Cabin: {formatted_fac['office']}")
-                    if formatted_fac.get("subjects"):
-                        subj_s = ", ".join(formatted_fac["subjects"]) if isinstance(formatted_fac["subjects"], list) else str(formatted_fac["subjects"])
-                        details.append(f"Subjects Taught: {subj_s}")
-                    if formatted_fac.get("qualifications"):
-                        details.append(f"Qualifications: {formatted_fac['qualifications']}")
-                    if formatted_fac.get("experience"):
-                        details.append(f"Experience: {formatted_fac['experience']}")
-                    if formatted_fac.get("research_interests"):
-                        ri_s = ", ".join(formatted_fac["research_interests"]) if isinstance(formatted_fac["research_interests"], list) else str(formatted_fac["research_interests"])
-                        details.append(f"Research Interests: {ri_s}")
-                    if formatted_fac.get("publications"):
-                        details.append(f"Publications & Patents: {formatted_fac['publications']}")
-                    if formatted_fac.get("projects"):
-                        details.append(f"Projects & Guidance: {formatted_fac['projects']}")
-                    if formatted_fac.get("awards"):
-                        details.append(f"Awards & Memberships: {formatted_fac['awards']}")
-                    if formatted_fac.get("responsibilities"):
-                        details.append(f"Responsibilities: {formatted_fac['responsibilities']}")
-                    if formatted_fac.get("bio"):
-                        details.append(f"Profile Summary: {formatted_fac['bio']}")
-                    fac_summaries.append("\n".join(details))
                 kind = "faculty"
-                if fac_summaries:
-                    parts.append("\n\n".join(fac_summaries))
+                if formatted_fac_list:
+                    from app.services.llm_provider import generate_completion
+                    fac_context_lines = []
+                    for f_item in formatted_fac_list[:4]:
+                        summary_block = (
+                            f"Name: {f_item.get('name')}\n"
+                            f"Designation: {f_item.get('designation')}\n"
+                            f"Department: {f_item.get('department')}\n"
+                            f"Email: {f_item.get('email')}\n"
+                            f"Cabin/Office: {f_item.get('office')}\n"
+                            f"Subjects: {f_item.get('subjects')}\n"
+                            f"Research Interests: {f_item.get('research_interests')}\n"
+                            f"Bio: {f_item.get('bio')}"
+                        )
+                        fac_context_lines.append(summary_block)
+                    try:
+                        ai_answer = await generate_completion(
+                            messages=[
+                                {
+                                    "role": "system",
+                                    "content": (
+                                        "You are Campus Intelligence, an AI assistant for university students. "
+                                        "Answer the student's question directly, naturally, and concisely (2 to 4 sentences) using the provided faculty records. "
+                                        "Highlight the professor who best matches the student's question (e.g. by their research focus, subjects taught, or role), "
+                                        "and provide their contact email and cabin/office so the student knows how to reach them. "
+                                        "Do NOT dump full resumes, publication lists, or long tables; detailed profile cards are already shown below your answer."
+                                    )
+                                },
+                                {
+                                    "role": "user",
+                                    "content": f"Student Question: {q}\n\nMatching Faculty:\n" + "\n---\n".join(fac_context_lines)
+                                }
+                            ],
+                            temperature=0.2,
+                            max_tokens=220
+                        )
+                    except Exception as synth_err:
+                        logger.warning("Faculty synthesis error: %s", synth_err)
+                        ai_answer = None
+
+                    if not ai_answer or ai_answer.startswith("I am currently running in offline"):
+                        f0 = formatted_fac_list[0]
+                        ai_answer = f"For your inquiry, you can contact **{f0['name']}** ({f0['designation']}, {f0['department']}) at {f0.get('contact') or f0.get('email') or 'their department cabin'}."
+                    parts.append(ai_answer)
                 else:
                     parts.append("No matching faculty records found.")
+
             elif tname == "get_events":
                 evs = r.get("events", [])
                 for i, e in enumerate(evs[:8]):
