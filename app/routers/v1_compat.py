@@ -1408,8 +1408,10 @@ async def v1_ingestion_preview(
         )
         sub_row = dict(await s_cur.fetchone())
 
-    # Run extraction synchronously or in background so preview is immediate
-    await enqueue_extraction_task(
+    # Extraction runs in the background (it can take 10-40s; a synchronous request dies at the ~30s
+    # proxy limit). The admin UI polls /v1/ingestion while status is 'processing'.
+    background_tasks.add_task(
+        enqueue_extraction_task,
         submission_id=str(sub_row["id"]),
         content=content,
         mime=mime,
@@ -1429,7 +1431,7 @@ async def v1_ingestion_preview(
 
 
 @router.post("/ingestion/{job_id}/retry")
-async def v1_ingestion_retry(job_id: str, request: Request):
+async def v1_ingestion_retry(job_id: str, request: Request, background_tasks: BackgroundTasks):
     """Re-run extraction on the stored file of a failed/empty job (the admin UI shows this button)."""
     _require_admin(request)
     async with get_write_db() as conn:
@@ -1450,7 +1452,8 @@ async def v1_ingestion_retry(job_id: str, request: Request):
         raise HTTPException(status_code=410, detail="Original file is no longer on the server; please upload it again.")
     with open(local_path, "rb") as fh:
         content = fh.read()
-    await enqueue_extraction_task(
+    background_tasks.add_task(
+        enqueue_extraction_task,
         submission_id=str(job_id),
         content=content,
         mime=row["mime"],
