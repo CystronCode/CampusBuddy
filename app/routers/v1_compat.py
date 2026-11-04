@@ -1252,6 +1252,9 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
         cols = ["day", "start_time", "end_time", "subject", "subject_name", "kind", "short_code", "faculty_name", "room"]
     elif dtype == "faculty" and rows:
         formatted_rows = []
+        raw_doc = ""
+        if isinstance(extracted, dict) and extracted.get("raw_text"):
+            raw_doc = str(extracted["raw_text"]).strip()
         for r in rows:
             if not isinstance(r, dict):
                 continue
@@ -1259,12 +1262,20 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
             ri_str = ", ".join(ri) if isinstance(ri, list) else str(ri or "")
             subjs = r.get("subjects")
             subjs_str = ", ".join(subjs) if isinstance(subjs, list) else str(subjs or "")
+            raw_t = str(r.get("raw_text") or raw_doc or "").strip()
+            bio_t = str(r.get("bio") or "").strip()
+            if not bio_t and raw_t:
+                bio_t = raw_t
+            if not raw_t and bio_t:
+                raw_t = bio_t
             formatted_rows.append({
                 "name": str(r.get("name") or "Faculty Member").strip(),
                 "designation": str(r.get("designation") or "Assistant Professor").strip(),
                 "department": str(r.get("department") or "AIML").strip(),
                 "email": str(r.get("email") or "").strip(),
+                "phone": str(r.get("phone") or "").strip(),
                 "cabin": str(r.get("cabin") or "").strip(),
+                "office_hours": str(r.get("office_hours") or "").strip(),
                 "qualifications": str(r.get("qualifications") or "").strip(),
                 "experience": str(r.get("experience") or "").strip(),
                 "research_interests": ri_str.strip(),
@@ -1273,10 +1284,11 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
                 "projects": str(r.get("projects") or "").strip(),
                 "awards": str(r.get("awards") or "").strip(),
                 "responsibilities": str(r.get("responsibilities") or "").strip(),
-                "bio": str(r.get("bio") or "").strip()
+                "bio": bio_t,
+                "raw_text": raw_t,
             })
         rows = formatted_rows
-        cols = ["name", "designation", "department", "email", "cabin", "qualifications", "experience", "research_interests", "subjects", "publications", "projects", "awards", "responsibilities", "bio"]
+        cols = ["name", "designation", "department", "email", "phone", "cabin", "qualifications", "experience", "research_interests", "subjects", "publications", "projects", "awards", "responsibilities", "bio", "raw_text"]
     elif dtype == "menu" and rows:
         formatted_rows = []
         for r in rows:
@@ -1506,7 +1518,10 @@ async def v1_ingestion_update_records(job_id: str, body: V1ConfirmInput, request
         elif dtype == "menu":
             ext_payload = {"items": recs}
         elif dtype == "faculty":
+            existing_ext = row["extracted"] if isinstance(row.get("extracted"), dict) else {}
             ext_payload = {"faculty": recs}
+            if existing_ext.get("raw_text"):
+                ext_payload["raw_text"] = existing_ext["raw_text"]
         else:
             ext_payload = {"holidays": recs}
 

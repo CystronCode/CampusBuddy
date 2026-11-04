@@ -400,7 +400,14 @@ async def enqueue_extraction_task(
                         extracted_data["raw_text"] = raw_content
 
                     fac_list = extracted_data.get("faculty", [])
-                    if not fac_list and raw_content:
+                    if fac_list:
+                        for f in fac_list:
+                            if isinstance(f, dict):
+                                if raw_content and not f.get("raw_text"):
+                                    f["raw_text"] = raw_content
+                                if not f.get("bio") and raw_content:
+                                    f["bio"] = raw_content
+                    elif raw_content:
                         import re
                         lines = [l.strip() for l in raw_content.split("\n") if l.strip()]
                         detected_name = lines[0][:80] if lines else "Faculty Member"
@@ -428,7 +435,8 @@ async def enqueue_extraction_task(
                             "email": email_found,
                             "phone": phone_found,
                             "cabin": cab_found,
-                            "bio": raw_content[:4000]
+                            "bio": raw_content,
+                            "raw_text": raw_content
                         }]
 
             # 1b. Never present an empty result as a successful draft: tell the admin why.

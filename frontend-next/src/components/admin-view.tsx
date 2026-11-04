@@ -1044,39 +1044,195 @@ function FacultyListPreview({
   onChange?: (next: DataRecord[]) => void;
 }) {
   return (
-    <div className="panel" style={{ padding: "16px 20px" }}>
-      <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 10 }}>
-        Faculty Directory ({records.length} profiles)
-      </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {records.map((r, i) => (
-          <div
-            key={i}
-            style={{
-              padding: "12px 16px",
-              background: "#f8fafc",
-              borderRadius: 8,
-              border: "1px solid #e2e8f0",
-            }}
-          >
-            <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a" }}>
-              {text(r.name || r.full_name)}
-            </div>
-            <div style={{ fontSize: 12, color: "#4f46e5", fontWeight: 600, marginTop: 2 }}>
-              {text(r.designation || "Faculty")} · {text(r.department || "Engineering")}
-            </div>
-            {!!r.cabin && (
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>
-                Office / Cabin: {text(r.cabin)}
+    <div className="panel" style={{ padding: "18px 22px" }}>
+      <div style={{ marginBottom: 14 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: "#0f172a" }}>
+          Faculty Directory ({records.length} {records.length === 1 ? "profile" : "profiles"})
+        </h3>
+        <p className="subtle" style={{ fontSize: 12, margin: "3px 0 0" }}>
+          Full extracted profiles, qualifications, research, publications, and all paragraphs of the document.
+        </p>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {records.map((r, i) => {
+          const rawDoc = text(r.raw_text);
+          const bio = text(r.bio);
+          const subjects = Array.isArray(r.subjects) ? r.subjects.join(", ") : text(r.subjects);
+          const researchInterests = Array.isArray(r.research_interests)
+            ? r.research_interests.join(", ")
+            : text(r.research_interests);
+
+          return (
+            <div
+              key={i}
+              style={{
+                padding: "16px 20px",
+                background: "#ffffff",
+                borderRadius: 10,
+                border: "1.5px solid #e2e8f0",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {/* Header: Name, Department, Designation, Contact */}
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "flex-start",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: 16, color: "#0f172a" }}>
+                    {text(r.name || r.full_name || "Faculty Member")}
+                  </div>
+                  <div style={{ fontSize: 13, color: "#4f46e5", fontWeight: 600, marginTop: 2 }}>
+                    {text(r.designation || "Faculty")} · {text(r.department || "AIML")}
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 8,
+                    fontSize: 12,
+                    color: "#475569",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  {!!r.cabin && (
+                    <span style={{ background: "#f1f5f9", padding: "4px 8px", borderRadius: 6 }}>
+                      📍 {text(r.cabin)}
+                    </span>
+                  )}
+                  {!!r.email && (
+                    <span style={{ background: "#f1f5f9", padding: "4px 8px", borderRadius: 6 }}>
+                      ✉️ {text(r.email)}
+                    </span>
+                  )}
+                  {!!r.phone && (
+                    <span style={{ background: "#f1f5f9", padding: "4px 8px", borderRadius: 6 }}>
+                      📞 {text(r.phone)}
+                    </span>
+                  )}
+                </div>
               </div>
-            )}
-            {!!r.subjects && (
-              <div style={{ fontSize: 12, color: "#334155", marginTop: 4 }}>
-                Courses: {Array.isArray(r.subjects) ? r.subjects.join(", ") : text(r.subjects)}
+
+              {/* Grid of structured academic details */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                  gap: 10,
+                  fontSize: 12.5,
+                  lineHeight: 1.5,
+                }}
+              >
+                {!!r.qualifications && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>🎓 Qualifications: </strong>
+                    <span style={{ color: "#475569" }}>{text(r.qualifications)}</span>
+                  </div>
+                )}
+                {!!r.experience && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>💼 Experience: </strong>
+                    <span style={{ color: "#475569" }}>{text(r.experience)}</span>
+                  </div>
+                )}
+                {!!subjects && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>📚 Courses Taught: </strong>
+                    <span style={{ color: "#475569" }}>{subjects}</span>
+                  </div>
+                )}
+                {!!researchInterests && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>🔬 Research Interests: </strong>
+                    <span style={{ color: "#475569" }}>{researchInterests}</span>
+                  </div>
+                )}
+                {!!r.publications && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>📄 Publications & Patents: </strong>
+                    <span style={{ color: "#475569" }}>{text(r.publications)}</span>
+                  </div>
+                )}
+                {!!r.projects && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>💡 Projects & Grants: </strong>
+                    <span style={{ color: "#475569" }}>{text(r.projects)}</span>
+                  </div>
+                )}
+                {!!r.awards && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>🏆 Awards & Honors: </strong>
+                    <span style={{ color: "#475569" }}>{text(r.awards)}</span>
+                  </div>
+                )}
+                {!!r.responsibilities && (
+                  <div style={{ background: "#f8fafc", padding: "8px 12px", borderRadius: 6, border: "1px solid #f1f5f9" }}>
+                    <strong style={{ color: "#334155" }}>🏛️ Responsibilities: </strong>
+                    <span style={{ color: "#475569" }}>{text(r.responsibilities)}</span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+
+              {/* Bio Summary */}
+              {!!bio && bio !== rawDoc && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 4 }}>
+                    📝 Profile Summary:
+                  </div>
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      fontSize: 12.5,
+                      lineHeight: 1.6,
+                      color: "#334155",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {bio}
+                  </div>
+                </div>
+              )}
+
+              {/* Complete all paragraphs of the PDF */}
+              {(!!rawDoc || (!!bio && (!r.qualifications || !r.experience))) && (
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0f172a", marginBottom: 4 }}>
+                    📑 Document Content (All Paragraphs of PDF):
+                  </div>
+                  <div
+                    style={{
+                      background: "#f8fafc",
+                      border: "1px solid #cbd5e1",
+                      borderRadius: 8,
+                      padding: "12px 16px",
+                      fontSize: 12.5,
+                      lineHeight: 1.7,
+                      color: "#1e293b",
+                      whiteSpace: "pre-wrap",
+                      maxHeight: 380,
+                      overflowY: "auto",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    {rawDoc || bio}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
