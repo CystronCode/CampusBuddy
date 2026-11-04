@@ -67,9 +67,16 @@ app.add_middleware(
 async def global_exception_handler(request, exc):
     logger.error("Unhandled exception on %s %s: %s", request.method, request.url.path, exc)
     from fastapi.responses import JSONResponse
+    origin = request.headers.get("origin") or "*"
     return JSONResponse(
         status_code=500,
         content={"detail": f"Server error: {str(exc)}"},
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
     )
 
 @app.get("/")

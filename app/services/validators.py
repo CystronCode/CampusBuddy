@@ -153,15 +153,15 @@ async def run_deterministic_validators(
                     async with get_read_db() as conn:
                         cursor = await conn.execute(
                             """SELECT id, name, department FROM faculty 
-                               WHERE lower(email) = %s AND (lower(name) != lower(%s) OR coalesce(department,'') != %s)""",
-                            (email, name, dept)
+                               WHERE lower(email) = %s AND lower(name) != lower(%s)""",
+                            (email, name)
                         )
                         conflict = await cursor.fetchone()
                         if conflict:
                             add_flag(
                                 f"{idx}.email", 
-                                "error", 
-                                f"Email conflicts with existing faculty ID {conflict['id']} ({conflict['name']})."
+                                "warning", 
+                                f"Email shared with existing faculty ID {conflict['id']} ({conflict['name']})."
                             )
                 except Exception as exc:
                     logger.debug("Faculty conflict DB check skipped: %s", exc)

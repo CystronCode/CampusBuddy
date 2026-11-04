@@ -21,7 +21,8 @@ def set_mock_chunks(chunks: List[Dict[str, Any]]):
 
 async def search_docs_hybrid(
     query_text: str, 
-    user_branch: Optional[str],
+    user_branch: Optional[str] = None,
+    user_year: Optional[int] = None,
     doc_type: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
@@ -44,7 +45,7 @@ async def search_docs_hybrid(
       WHERE (c.branch IS NULL OR c.branch = %s)
         AND (c.valid_until IS NULL OR c.valid_until >= current_date)
         AND (1 - (c.embedding <=> %s::vector)) >= %s
-        AND (%s::text IS NULL OR c.doc_type = %s)
+        AND (%s::text IS NULL OR c.doc_type = %s::text)
       LIMIT 20
     ),
     fts_matches AS (
@@ -57,7 +58,7 @@ async def search_docs_hybrid(
       WHERE (c.branch IS NULL OR c.branch = %s)
         AND (c.valid_until IS NULL OR c.valid_until >= current_date)
         AND c.tsv @@ websearch_to_tsquery('english', %s)
-        AND (%s::text IS NULL OR c.doc_type = %s)
+        AND (%s::text IS NULL OR c.doc_type = %s::text)
       LIMIT 20
     )
     SELECT 
@@ -86,7 +87,6 @@ async def search_docs_hybrid(
             return [dict(r) for r in rows]
     except Exception as exc:
         logger.warning("Database hybrid search query failed, checking mock chunks: %s", exc)
-        # Mock retrieval matching branch isolation and floor
         matched = []
         for c in _mock_chunks:
             if c.get("branch") and c.get("branch") != user_branch:
