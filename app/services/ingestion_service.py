@@ -10,16 +10,16 @@ from docx import Document as DocxDocument
 from google import genai
 from google.genai import types
 from app.core.config import settings
-from app.core.database import get_write_db
+from app.core.database import get_read_db, get_write_db
 from app.services.validators import run_deterministic_validators
 from app.schemas.ingestion_schemas import GET_SCHEMA_FOR_TYPE
 
 logger = logging.getLogger("campus.ingestion")
 
 # Singleton Invariant: exactly one extraction job executed concurrently
-EXTRACTION_SEMAPHORE = asyncio.Semaphore(5)
+EXTRACTION_SEMAPHORE = asyncio.Semaphore(1)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", settings.GEMINI_API_KEY)
-GEMINI_MODEL_EXTRACT = os.environ.get("GEMINI_MODEL_EXTRACT", "gemini-3.5-flash")
+GEMINI_MODEL_EXTRACT = os.environ.get("GEMINI_MODEL_EXTRACT", settings.GEMINI_MODEL_EXTRACT)
 
 _ai_clients: List[genai.Client] = []
 
@@ -83,12 +83,36 @@ def parse_docx_sync(content: bytes) -> str:
     paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
     return "\n".join(paragraphs)
 
-CANDIDATE_MODELS = [
-    "gemini-3.5-flash",
+CANDIDATE_MODELS = list(dict.fromkeys([
+    GEMINI_MODEL_EXTRACT,
     "gemini-3-flash-preview",
+    "gemini-3.5-flash",
     "gemini-flash-latest",
-    "gemini-3.1-flash-lite",
-]
+    "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite-preview",
+]))
+
+# Per-call ceiling. With low thinking effort a full timetable returns in ~10s; anything
+# beyond 75s is a hung/overloaded model and we should move to the next one.
+VISION_TIMEOUT_SEC = 75.0
+# Hard wall-clock budget for the whole model/key cascade so an upload can never hang for minutes.
+VISION_TOTAL_BUDGET_SEC = 150.0
+
+def _thinking_config_for(model: str) -> Optional[Any]:
+    """Gemini 3 flash models 'think' by default (28-34s for a timetable). Table transcription needs
+    no deep reasoning: LOW effort measured ~9s with the same row count and faculty mapping."""
+    if model.startswith("gemini-3") and "lite" not in model:
+        try:
+            return types.ThinkingConfig(thinking_level="LOW")
+        except Exception:
+            return None
+    return None
+
+_ROW_KEYS = {"timetable": "slots", "menu": "items", "holidays": "holidays", "faculty": "faculty"}
+
+def _is_transient_error(e: Exception) -> bool:
+    msg = str(e)
+    return any(tok in msg for tok in ("503", "429", "UNAVAILABLE", "RESOURCE_EXHAUSTED", "DEADLINE"))
 
 def normalize_extracted_payload(cand: Any, data_type: str) -> Dict[str, Any]:
     """Ensure returned JSON matches canonical keys for faculty, menu, timetable, holidays."""
@@ -132,64 +156,64 @@ async def extract_via_gemini_vision(content: bytes, mime: str, schema_cls: Any, 
     if not clients:
         return {}
 
-    prompt_map = {
-        "menu": "Extract all canteen/mess food items, prices, and meals. Return valid JSON adhering to schema with key 'items': [{'item': 'Name', 'price': 50, 'meal': 'breakfast'|'lunch'|'snacks'|'dinner', 'is_veg': true|false}].",
-        "faculty": "Extract ALL details of every faculty member in full: name, designation, department, email, phone, cabin, office_hours, qualifications (degrees, universities, years, ranks), experience (all roles, institutions, dates), research_interests (list of topics), subjects (courses taught), publications (all journal papers, conferences, books, patents with titles and DOIs), projects (consultancy, grants, funding, amounts), awards (all honors, ranks, memberships), responsibilities (all admin and committee roles), bio (full narrative summary). Return JSON with key 'faculty': [...].",
-        "timetable": "Extract every schedule slot with day (1=Mon..7=Sun), start_time (HH:MM), end_time (HH:MM), subject (course code and title), subject_name, kind ('lecture'|'lab'|'tutorial'), short_code (faculty initials), faculty_name (full name from legend table), room. Return JSON with key 'slots': [...].",
-        "holidays": "Extract all holidays, exam dates, CIE tests, milestones with date (YYYY-MM-DD), name, kind. Return JSON with key 'holidays': [...]."
-    }
-    vision_prompt = prompt_map.get(data_type, "Extract structured records adhering precisely to the JSON schema.")
+    # Full prompt from the known-good Nov 1 baseline (timetable legend mapping, faculty depth, holidays).
+    vision_prompt = (
+        "Extract structured records adhering precisely to the JSON schema. "
+        "For timetables: carefully inspect both the main schedule grid AND any course/faculty legend or mapping table below/beside the grid. "
+        "For every timetable slot, map the subject code to its full course name (subject_name) AND map the faculty initials (short_code) and course-handling faculty full name (faculty_name) from the timetable legend/footer table! "
+        "Do not confuse faculty initials (like AI, RP, SN, KVR) with room numbers unless explicitly labeled as a room. "
+        "Take start_time/end_time for each slot from the column header of the grid (24-hour HH:MM) and the day from the row label. "
+        "Do NOT output BREAK, LUNCH, RECESS or empty cells as slots. Leave room null if no room is printed - never guess one. "
+        "For menus: extract every food item with price, meal (breakfast|lunch|snacks|dinner) and is_veg. "
+        "For holidays or academic calendars, extract all named dates, semester milestones, exam/quiz dates, or holidays. "
+        "For faculty profiles or directories, extract ALL details in full (not just contact info): educational qualifications, degrees, teaching/research/industry experience, research interests, courses/subjects taught, publications/journals/conferences/patents, funded projects/grants, awards/memberships, administrative responsibilities, and a comprehensive bio summary. "
+        f"The document type is '{data_type}'. "
+        "Output valid JSON without markdown wrapping or code fences."
+    )
+
+    def _call(client, model, use_schema):
+        cfg = dict(response_mime_type="application/json", temperature=0.0)
+        if use_schema:
+            cfg["response_schema"] = schema_cls
+        thinking = _thinking_config_for(model)
+        if thinking is not None:
+            cfg["thinking_config"] = thinking
+        return client.models.generate_content(
+            model=model,
+            contents=[types.Part.from_bytes(data=content, mime_type=mime), vision_prompt],
+            config=types.GenerateContentConfig(**cfg),
+        )
 
     last_err = None
+    deadline = asyncio.get_event_loop().time() + VISION_TOTAL_BUDGET_SEC
     for client in clients:
         for m in CANDIDATE_MODELS:
-            try:
-                # 1. Try with schema
-                response = await asyncio.wait_for(
-                    asyncio.to_thread(
-                        client.models.generate_content,
-                        model=m,
-                        contents=[
-                            types.Part.from_bytes(data=content, mime_type=mime),
-                            vision_prompt + " Output valid JSON without markdown wrapping or code fences."
-                        ],
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=schema_cls,
-                            temperature=0.0
-                        )
-                    ),
-                    timeout=20.0
-                )
-                parsed = json.loads(response.text)
-                return normalize_extracted_payload(parsed, data_type)
-            except Exception as e:
-                last_err = e
-                logger.warning("Gemini model %s with schema failed (%s); trying without schema constraint.", m, e)
+            for use_schema in (True, False):
+                remaining = deadline - asyncio.get_event_loop().time()
+                if remaining <= 5:
+                    if last_err:
+                        raise last_err
+                    return {}
                 try:
-                    # 2. Fallback without rigid schema constraint
-                    response2 = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            client.models.generate_content,
-                            model=m,
-                            contents=[
-                                types.Part.from_bytes(data=content, mime_type=mime),
-                                vision_prompt + " Return strictly raw valid JSON."
-                            ],
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json",
-                                temperature=0.0
-                            )
-                        ),
-                        timeout=20.0
+                    response = await asyncio.wait_for(
+                        asyncio.to_thread(_call, client, m, use_schema), timeout=min(VISION_TIMEOUT_SEC, remaining)
                     )
-                    parsed2 = json.loads(response2.text)
-                    return normalize_extracted_payload(parsed2, data_type)
-                except Exception as e2:
-                    last_err = e2
-                    logger.warning("Gemini model %s fallback failed: %s", m, e2)
+                    parsed = normalize_extracted_payload(json.loads(response.text), data_type)
+                    if any(isinstance(v, list) and len(v) > 0 for v in parsed.values()) or not use_schema:
+                        return parsed
+                    # schema-constrained call returned nothing: retry unconstrained on same model
+                    continue
+                except Exception as e:
+                    last_err = e
+                    logger.warning("Gemini model %s (schema=%s) vision extraction failed: %s", m, use_schema, e)
+                    if _is_transient_error(e):
+                        # Overloaded/quota: retrying same model without schema won't help; move to next model.
+                        await asyncio.sleep(1.0)
+                        break
 
-    raise last_err
+    if last_err:
+        raise last_err
+    return {}
 
 async def enqueue_extraction_task(
     submission_id: str,
@@ -217,6 +241,7 @@ async def enqueue_extraction_task(
             has_text_layer = len(text_layer.strip()) > 50
 
             extracted_data = None
+            vision_error: Optional[Exception] = None
             client = get_ai_client()
 
             # Fast cache lookup by sha256 to reuse verified extractions and preserve quota
@@ -313,7 +338,8 @@ async def enqueue_extraction_task(
                         try:
                             extracted_data = await extract_via_gemini_vision(content, mime, target_schema, data_type=data_type)
                         except Exception as vis_err:
-                            logger.warning("Gemini vision extraction failed (%s); checking historical fallback.", vis_err)
+                            vision_error = vis_err
+                            logger.warning("Gemini vision extraction failed: %s", vis_err)
 
                 # High-Speed Groq LPU Document Extraction Fallback
                 if (extracted_data is None or all(len(v) == 0 for v in extracted_data.values() if isinstance(v, list))) and has_text_layer:
@@ -351,29 +377,6 @@ async def enqueue_extraction_task(
                                     break
                     except Exception as groq_err:
                         logger.warning("Groq document extraction fallback error: %s", groq_err)
-
-                if extracted_data is None:
-                    # Check recent non-empty extractions for this data_type as a graceful fallback during quota exhaustion
-                    try:
-                        async with get_read_db() as conn:
-                            cur = await conn.execute(
-                                """SELECT extracted FROM submissions 
-                                   WHERE data_type = %s AND extracted IS NOT NULL AND extracted != '{}'::jsonb
-                                   ORDER BY created_at DESC LIMIT 5""",
-                                (data_type,)
-                            )
-                            for r in await cur.fetchall():
-                                cand = r.get("extracted")
-                                cand = normalize_extracted_payload(cand, data_type)
-                                for k in ("holidays", "items", "slots", "faculty"):
-                                    if len(cand.get(k, [])) > 0:
-                                        extracted_data = cand
-                                        logger.info("Used historical non-empty extraction for %s (%s rows)", data_type, len(cand[k]))
-                                        break
-                                if extracted_data is not None:
-                                    break
-                    except Exception as hist_err:
-                        logger.debug("Historical extraction fallback skipped: %s", hist_err)
 
                 if extracted_data is None:
                     if data_type == "timetable":
@@ -427,6 +430,18 @@ async def enqueue_extraction_task(
                             "cabin": cab_found,
                             "bio": raw_content[:4000]
                         }]
+
+            # 1b. Never present an empty result as a successful draft: tell the admin why.
+            if data_type in _ROW_KEYS and isinstance(extracted_data, dict):
+                rows_found = extracted_data.get(_ROW_KEYS[data_type]) or []
+                if not rows_found:
+                    if client is None:
+                        reason = "No usable GEMINI_API_KEYS configured, so scanned files/images cannot be read."
+                    elif vision_error is not None:
+                        reason = f"All Gemini models failed: {str(vision_error)[:300]}"
+                    else:
+                        reason = "The model returned no rows. Check that the file is a clear, upright, full-page scan."
+                    raise RuntimeError(f"Could not extract any {data_type} records. {reason}")
 
             # 2. Execute Deterministic Validators
             confidence_flags = await run_deterministic_validators(data_type, extracted_data, metadata)

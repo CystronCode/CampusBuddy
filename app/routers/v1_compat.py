@@ -1322,8 +1322,8 @@ def _submission_to_job(sub: Dict[str, Any]) -> Dict[str, Any]:
             "columns": cols,
             "fields": [],
             "mapping": {c: c for c in cols},
-            "records": rows[:60],
-            "raw": rows[:30],
+            "records": rows[:500],
+            "raw": rows[:50],
             "errors": [],
             "error_count": 0,
             "valid_count": len(rows),
@@ -1426,6 +1426,43 @@ async def v1_ingestion_preview(
         updated_sub = dict(await s_cur2.fetchone())
 
     return _submission_to_job(updated_sub)
+
+
+@router.post("/ingestion/{job_id}/retry")
+async def v1_ingestion_retry(job_id: str, request: Request):
+    """Re-run extraction on the stored file of a failed/empty job (the admin UI shows this button)."""
+    _require_admin(request)
+    async with get_write_db() as conn:
+        cur = await conn.execute(
+            """SELECT s.id, s.data_type, f.storage_path, f.mime
+               FROM submissions s JOIN files f ON f.id = s.file_id WHERE s.id = %s""",
+            (job_id,),
+        )
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Submission job not found.")
+        await conn.execute(
+            "UPDATE submissions SET status = 'processing', error = NULL, updated_at = now() WHERE id = %s",
+            (job_id,),
+        )
+    local_path = os.path.join("uploads", str(row["storage_path"]))
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=410, detail="Original file is no longer on the server; please upload it again.")
+    with open(local_path, "rb") as fh:
+        content = fh.read()
+    await enqueue_extraction_task(
+        submission_id=str(job_id),
+        content=content,
+        mime=row["mime"],
+        data_type=row["data_type"],
+        metadata={"branch": "CSE", "year": 3, "section": "A"},
+    )
+    async with get_write_db() as conn:
+        cur2 = await conn.execute(
+            "SELECT id, file_id, data_type, scope, status, extracted, error, created_at FROM submissions WHERE id = %s",
+            (job_id,),
+        )
+        return _submission_to_job(dict(await cur2.fetchone()))
 
 
 class V1ConfirmInput(BaseModel):

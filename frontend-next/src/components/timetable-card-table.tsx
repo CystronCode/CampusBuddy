@@ -106,6 +106,21 @@ export function TimetableCardTable({
 
   const weekdays = DAY_NAMES.slice(0, 6); // Monday to Saturday
 
+  // Grid columns come from the extracted data (each distinct start time), NOT a hardcoded list.
+  // A fixed list silently hid every slot whose times didn't match it exactly, so a correctly
+  // read timetable looked empty. Falls back to the default columns only when there are no slots.
+  const timeSlots: string[] = (() => {
+    const endByStart = new Map<string, string>();
+    for (const it of enrichedItems) {
+      const cur = endByStart.get(it.start_time);
+      if (!cur || it.end_time < cur) endByStart.set(it.start_time, it.end_time);
+    }
+    if (endByStart.size === 0) return TIMETABLE_TIME_SLOTS;
+    return Array.from(endByStart.keys())
+      .sort()
+      .map((st) => `${st}–${endByStart.get(st)}`);
+  })();
+
   const filteredItems =
     activeDayFilter === "all"
       ? enrichedItems
@@ -216,11 +231,12 @@ export function TimetableCardTable({
   // Find slot that matches given day and time slot
   function findSlot(dayName: string, slotLabel: string): TimetableCardItem | undefined {
     const [slotStart, slotEnd] = slotLabel.split("–");
+    // Overlap match: a slot belongs in a column if their time ranges intersect.
     return enrichedItems.find(
       (item) =>
         item.day.toLowerCase() === dayName.toLowerCase() &&
-        item.start_time <= slotStart &&
-        item.end_time >= slotEnd,
+        item.start_time < slotEnd &&
+        item.end_time > slotStart,
     );
   }
 
@@ -324,7 +340,7 @@ export function TimetableCardTable({
                 >
                   Day \ Time
                 </th>
-                {TIMETABLE_TIME_SLOTS.map((sl) => (
+                {timeSlots.map((sl) => (
                   <th key={sl} style={{ minWidth: 165, textAlign: "center" }}>
                     <div style={{ fontWeight: 700 }}>{sl}</div>
                   </th>
@@ -353,7 +369,7 @@ export function TimetableCardTable({
                     </div>
                   </td>
 
-                  {TIMETABLE_TIME_SLOTS.map((sl) => {
+                  {timeSlots.map((sl) => {
                     const hit = findSlot(dayName, sl);
 
                     if (!hit) {
