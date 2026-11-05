@@ -18,7 +18,10 @@ import {
   TriangleAlert,
   ShieldCheck,
   Compass,
+  Mic,
+  MicOff,
 } from "lucide-react";
+import { useVoiceInput } from "@/lib/use-voice-input";
 import {
   supabase,
   api,
@@ -185,7 +188,14 @@ const loginSchema = z.object({
   password: z.string().min(6, "Use at least six characters."),
 });
 
-function Login({ onSession }: { onSession?: (s: Session) => void }) {
+function Login({
+  onSession,
+  initialPortal = "student",
+}: {
+  onSession?: (s: Session) => void;
+  initialPortal?: "student" | "admin";
+}) {
+  const [portal, setPortal] = useState<"student" | "admin">(initialPortal);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -197,18 +207,38 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
     formState: { errors },
   } = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: initialPortal === "admin" ? "admin@campus.edu.in" : "student@campus.edu.in",
+      password: "123456",
+    },
   });
+
+  function fillDemo(email: string, pass: string) {
+    setValue("email", email, { shouldValidate: true });
+    setValue("password", pass, { shouldValidate: true });
+    setError("");
+  }
+
+  function handlePortalSwitch(target: "student" | "admin") {
+    setPortal(target);
+    setError("");
+    if (target === "admin") {
+      fillDemo("admin@campus.edu.in", "123456");
+    } else {
+      fillDemo("student@campus.edu.in", "123456");
+    }
+  }
 
   async function submit(values: z.infer<typeof loginSchema>) {
     setBusy(true);
     setError("");
 
-    // 1. Try institutional API login first (handles student@campus.edu.in, admin@campus.edu.in)
+    // 1. Try institutional API login with portal partition validation
     try {
       const res = await fetch(`${API}/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, portal }),
       });
       if (res.ok) {
         const data = await res.json();
@@ -218,7 +248,7 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
           setBusy(false);
           return;
         }
-      } else if (values.email.toLowerCase().endsWith("@campus.edu.in")) {
+      } else {
         const errJson = await res.json().catch(() => ({}));
         setError(errJson.detail || "Invalid institutional credentials.");
         setBusy(false);
@@ -243,11 +273,19 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
     setBusy(false);
   }
 
-  function fillDemo(email: string, pass: string) {
-    setValue("email", email, { shouldValidate: true });
-    setValue("password", pass, { shouldValidate: true });
-    setError("");
-  }
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.altKey && (e.key === "s" || e.key === "S")) {
+        e.preventDefault();
+        handlePortalSwitch("student");
+      } else if (e.altKey && (e.key === "a" || e.key === "A")) {
+        e.preventDefault();
+        handlePortalSwitch("admin");
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   async function reset() {
     const email = getValues("email");
@@ -267,64 +305,124 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
 
   return (
     <div className="login">
-      <div className="lp">
-        <div className="brand" style={{ padding: 0, display: "flex", alignItems: "center", gap: 10, fontWeight: 800, fontSize: 17 }}>
-          <div className="logo">C</div>
+      <div className={`lp ${portal === "admin" ? "admin-lp" : "student-lp"}`}>
+        <div
+          className="brand"
+          style={{
+            padding: 0,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            fontWeight: 800,
+            fontSize: 17,
+          }}
+        >
+          <div className={`logo ${portal === "admin" ? "admin-logo" : ""}`}>C</div>
           <span>
-            CampusOS <span style={{ color: "#818cf8" }}>AI</span>
+            CampusOS{" "}
+            <span style={{ color: portal === "admin" ? "#34d399" : "#818cf8" }}>
+              {portal === "admin" ? "Admin" : "AI"}
+            </span>
           </span>
         </div>
         <div>
-          <div className="eyebrow" style={{ color: "#a5b4fc" }}>
-            One campus. One connected experience.
+          <div
+            className="eyebrow"
+            style={{ color: portal === "admin" ? "#6ee7b7" : "#a5b4fc" }}
+          >
+            {portal === "admin" ? "CAMPUS ADMINISTRATION CONSOLE" : "STUDENT ACCESS WORKSPACE"}
           </div>
           <h2>
-            Your campus,
-            <br />
-            <span>at your fingertips.</span>
+            {portal === "admin" ? (
+              <>
+                Campus Operations,
+                <br />
+                <span style={{ color: "#34d399" }}>governance & control.</span>
+              </>
+            ) : (
+              <>
+                Your campus,
+                <br />
+                <span style={{ color: "#818cf8" }}>at your fingertips.</span>
+              </>
+            )}
           </h2>
-          <p style={{ color: "#c7d2fe", maxWidth: 340, lineHeight: 1.6 }}>
-            A clearer day starts here. Classes, answers and opportunities,
-            together in one place.
+          <p style={{ color: portal === "admin" ? "#cbd5e1" : "#c7d2fe", maxWidth: 360, lineHeight: 1.6 }}>
+            {portal === "admin"
+              ? "Restricted institutional console for document OCR ingestion, timetable scheduling, real-time canteen menu management, and governance."
+              : "Classes, attendance safe margins, budget canteen meals, and notices — together in your personal student hub."}
           </p>
         </div>
-        <div style={{ fontSize: 12, color: "#a5b4fc" }}>
-          CampusOS AI · Institutional intelligence, thoughtfully connected.
+        <div
+          style={{
+            fontSize: 12,
+            color: portal === "admin" ? "#6ee7b7" : "#a5b4fc",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          {portal === "admin" ? <ShieldCheck size={14} /> : <GraduationCap size={14} />}
+          {portal === "admin"
+            ? "Campus Administration · Authorized personnel access only"
+            : "CampusOS Student Portal · Grounded in verified institutional data"}
         </div>
       </div>
       <div className="lf">
         <form onSubmit={handleSubmit(submit)} noValidate>
-          <div className="eyebrow">Your campus workspace</div>
-          <h2 style={{ fontSize: 28, letterSpacing: "-0.02em", margin: "6px 0" }}>
-            Welcome to CampusOS
-          </h2>
-          <p className="mute">Sign in with your student or administrative account.</p>
-
-          <div className="card" style={{ padding: 14, marginTop: 16 }}>
-            <div className="mute" style={{ fontWeight: 700, fontSize: 11, letterSpacing: "0.06em" }}>
-              QUICK DEMO ACCOUNTS (1-CLICK FILL)
-            </div>
+          {/* Portal Selector Tabs */}
+          <div className="portal-selector-bar" role="tablist" aria-label="Select Portal">
             <button
               type="button"
-              className="demo"
-              onClick={() => fillDemo("student@campus.edu.in", "123456")}
+              role="tab"
+              aria-selected={portal === "student"}
+              className={`portal-tab ${portal === "student" ? "active student" : ""}`}
+              onClick={() => handlePortalSwitch("student")}
             >
-              <span className="badge b-stu">STUDENT</span>
-              <span className="mono" style={{ fontSize: 12 }}>
-                student@campus.edu.in · 123456
-              </span>
+              <GraduationCap size={16} />
+              <span>Student Portal</span>
             </button>
             <button
               type="button"
-              className="demo"
-              onClick={() => fillDemo("admin@campus.edu.in", "123456")}
+              role="tab"
+              aria-selected={portal === "admin"}
+              className={`portal-tab ${portal === "admin" ? "active admin" : ""}`}
+              onClick={() => handlePortalSwitch("admin")}
             >
-              <span className="badge b-adm">ADMIN</span>
-              <span className="mono" style={{ fontSize: 12 }}>
-                admin@campus.edu.in · 123456
-              </span>
+              <ShieldCheck size={16} />
+              <span>Administrative Portal</span>
             </button>
           </div>
+
+          <div className="eyebrow">
+            {portal === "admin" ? "CAMPUS ADMINISTRATION ACCESS" : "STUDENT INSTITUTIONAL ACCESS"}
+          </div>
+          <h2 style={{ fontSize: 26, letterSpacing: "-0.02em", margin: "6px 0" }}>
+            {portal === "admin" ? "Administrator Sign In" : "Student Sign In"}
+          </h2>
+          <p className="mute">
+            {portal === "admin"
+              ? "Sign in with your administrative credentials to manage campus operations."
+              : "Sign in with your student institution account to view classes and campus updates."}
+          </p>
+
+          {/* Quick 1-click Demo Fill Pill */}
+          <button
+            type="button"
+            className={`demo-account-pill ${portal === "admin" ? "demo-admin" : "demo-student"}`}
+            onClick={() =>
+              fillDemo(
+                portal === "admin" ? "admin@campus.edu.in" : "student@campus.edu.in",
+                "123456",
+              )
+            }
+          >
+            {portal === "admin" ? <ShieldCheck size={14} /> : <GraduationCap size={14} />}
+            <span>
+              Fill Demo {portal === "admin" ? "Admin" : "Student"}:{" "}
+              <b>{portal === "admin" ? "admin@campus.edu.in" : "student@campus.edu.in"}</b> · 123456
+            </span>
+          </button>
 
           {sent && (
             <div className="success" role="status" style={{ marginTop: 12 }}>
@@ -333,14 +431,14 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
           )}
 
           <label className="lbl" htmlFor="email">
-            Institution email
+            {portal === "admin" ? "Administrator email" : "Student institution email"}
           </label>
           <input
             className="field"
             id="email"
             type="email"
             autoComplete="username"
-            placeholder="student@campus.edu.in"
+            placeholder={portal === "admin" ? "admin@campus.edu.in" : "student@campus.edu.in"}
             style={{ width: "100%" }}
             {...register("email")}
             aria-invalid={!!errors.email}
@@ -359,7 +457,7 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
             id="password"
             type="password"
             autoComplete="current-password"
-            placeholder="••••••"
+            placeholder="Enter password"
             style={{ width: "100%" }}
             {...register("password")}
             aria-invalid={!!errors.password}
@@ -370,26 +468,54 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
             </p>
           )}
 
-          <div
-            role="alert"
-            style={{
-              color: "#e11d48",
-              fontSize: 13,
-              minHeight: 20,
-              margin: "8px 0",
-            }}
-          >
-            {error}
-          </div>
+          {error && (
+            <div
+              role="alert"
+              style={{
+                background: "#fff1f2",
+                border: "1px solid #fecdd3",
+                borderRadius: 8,
+                padding: "10px 14px",
+                color: "#e11d48",
+                fontSize: 13,
+                margin: "12px 0",
+                lineHeight: 1.5,
+              }}
+            >
+              <div style={{ marginBottom: error.includes("Switch") || error.includes("Portal") ? 8 : 0 }}>
+                {error}
+              </div>
+              {(error.includes("Administrative Account") || error.includes("Student Portal") || error.includes("privileges")) && (
+                <button
+                  type="button"
+                  className="btn sm"
+                  style={{
+                    background: portal === "student" ? "#0f172a" : "#4338ca",
+                    color: "#fff",
+                    fontSize: 12,
+                    padding: "4px 10px",
+                  }}
+                  onClick={() => handlePortalSwitch(portal === "student" ? "admin" : "student")}
+                >
+                  Switch to {portal === "student" ? "Administrative Portal" : "Student Portal"} →
+                </button>
+              )}
+            </div>
+          )}
 
           <button
             className="btn"
             type="submit"
             disabled={busy}
-            style={{ width: "100%", padding: 13 }}
+            style={{
+              width: "100%",
+              padding: 13,
+              marginTop: 10,
+              background: portal === "admin" ? "linear-gradient(135deg, #059669, #10b981)" : undefined,
+            }}
           >
             {busy ? <LoaderCircle className="spin" size={16} /> : null}
-            Sign in →
+            Sign in to {portal === "admin" ? "Admin Console" : "Student Workspace"} →
           </button>
 
           {supabase && (
@@ -405,10 +531,8 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
             </p>
           )}
 
-          <p className="mute" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
-            Role-Based Access Control is applied automatically: students see tailored
-            classes, budget canteens and personal schedules; admins access the Campus
-            Management console and data ingestion.
+          <p className="mute" style={{ fontSize: 12, lineHeight: 1.6, marginTop: 16, textAlign: "center" }}>
+            CampusOS Institutional Access · Secure login for students, faculty & administration
           </p>
         </form>
       </div>
@@ -416,7 +540,7 @@ function Login({ onSession }: { onSession?: (s: Session) => void }) {
   );
 }
 
-const CMDS: [string, Page | "@student" | "@admin" | `ask:${string}`, string, "*" | "student" | "admin"][] = [
+const CMDS: [string, Page | "@switch_admin" | "@switch_student" | `ask:${string}`, string, "*" | "student" | "admin"][] = [
   ["Go to Home", "Home", "i-home", "*"],
   ["Ask CampusOS", "Ask CampusOS", "i-ai", "*"],
   ["Go to Timetable", "Timetable", "i-cal", "*"],
@@ -428,16 +552,17 @@ const CMDS: [string, Page | "@student" | "@admin" | `ask:${string}`, string, "*"
   ["Settings", "Settings", "i-gear", "*"],
   ["Operating Systems · LH-204 · 11:30", "Timetable", "i-cal", "student"],
   ["Paneer Rice Bowl · ₹90", "Canteen", "i-food", "student"],
-  ["Switch to Admin", "@admin", "i-shield", "student"],
+  ["Switch to Admin Portal (Requires Login)", "@switch_admin", "i-shield", "student"],
   ["Admin Console", "Admin Console", "i-shield", "admin"],
   ["System Intelligence", "System Intelligence", "i-code", "admin"],
   ["Menu Manager", "Menu Manager", "i-food", "admin"],
-  ["Switch to Student", "@student", "i-home", "admin"],
+  ["Switch to Student Portal (Requires Login)", "@switch_student", "i-home", "admin"],
 ];
 
 export function CampusApp() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [portalTarget, setPortalTarget] = useState<"student" | "admin">("student");
   const [members, setMembers] = useState<Membership[]>([]);
   const [tenant, setTenant] = useState("");
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -587,51 +712,33 @@ export function CampusApp() {
     [session, tenant],
   );
 
-  async function signOut() {
-    if (typeof window !== "undefined") {
-      localStorage.removeItem("campusos_session");
-    }
-    if (typeof document !== "undefined") {
-      document.body.classList.remove("admin");
-    }
-    await supabase?.auth.signOut();
-    setSession(null);
-    setProfile(null);
-    setPage("Home");
-  }
-
-  const switchPersona = useCallback(
-    async (target: "student" | "admin") => {
-      if ((target === "admin" && admin) || (target === "student" && !admin)) {
-        return;
+  const signOut = useCallback(
+    async (targetPortal?: "student" | "admin") => {
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("campusos_session");
       }
-      const email =
-        target === "admin" ? "admin@campus.edu.in" : "student@campus.edu.in";
-      try {
-        const res = await fetch(`${API}/v1/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password: "123456" }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.session) {
-            localStorage.setItem(
-              "campusos_session",
-              JSON.stringify(data.session),
-            );
-            setSession(data.session as unknown as Session);
-            setPage("Home");
-            showToast(
-              `Switched to the ${target === "admin" ? "Admin" : "Student"} version`,
-            );
-          }
-        }
-      } catch {
-        showToast("Could not switch persona right now.");
+      if (typeof document !== "undefined") {
+        document.body.classList.remove("admin");
+      }
+      await supabase?.auth.signOut();
+      setSession(null);
+      setProfile(null);
+      setPage("Home");
+      if (targetPortal) {
+        setPortalTarget(targetPortal);
       }
     },
-    [admin, showToast],
+    [],
+  );
+
+  const switchPortalWithAuth = useCallback(
+    async (target: "student" | "admin") => {
+      await signOut(target);
+      showToast(
+        `Please log in with your ${target === "admin" ? "administrative" : "student"} credentials.`,
+      );
+    },
+    [signOut, showToast],
   );
 
   const navigate = useCallback(
@@ -681,17 +788,17 @@ export function CampusApp() {
       setPalOpen(false);
       if (!cmd) return;
       const target = cmd[1];
-      if (target === "@admin") {
-        void switchPersona("admin");
-      } else if (target === "@student") {
-        void switchPersona("student");
+      if (target === "@switch_admin") {
+        void switchPortalWithAuth("admin");
+      } else if (target === "@switch_student") {
+        void switchPortalWithAuth("student");
       } else if (target.startsWith("ask:")) {
         ask(target.slice(4));
       } else {
         navigate(target as Page);
       }
     },
-    [navigate, switchPersona],
+    [navigate, switchPortalWithAuth],
   );
 
   useEffect(() => {
@@ -736,7 +843,10 @@ export function CampusApp() {
     return (
       <>
         <SvgSprite />
-        <Login onSession={(s) => setSession(s)} />
+        <Login
+          initialPortal={portalTarget}
+          onSession={(s) => setSession(s)}
+        />
       </>
     );
   if (
@@ -754,7 +864,7 @@ export function CampusApp() {
             <Button variant="outline" onClick={refresh}>
               Retry connection
             </Button>
-            <Button variant="ghost" onClick={signOut}>
+            <Button variant="ghost" onClick={() => signOut()}>
               Sign out
             </Button>
           </>
@@ -928,7 +1038,7 @@ export function CampusApp() {
               <button
                 type="button"
                 className="so"
-                onClick={signOut}
+                onClick={() => signOut()}
                 title="Sign out"
                 aria-label="Sign out"
               >
@@ -966,25 +1076,29 @@ export function CampusApp() {
               </span>
               <span className="kbd">{isMac ? "⌘ K" : "Ctrl K"}</span>
             </button>
-            <div
-              className={`persona ${admin ? "admin" : ""}`}
-              role="group"
-              aria-label="Switch persona"
-            >
-              <span className="pill" />
+            <div className="portal-header-badge">
+              <span
+                className={`badge ${admin ? "b-adm" : "b-stu"}`}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  padding: "5px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {admin ? <ShieldCheck size={13} /> : <GraduationCap size={13} />}
+                {admin ? "ADMIN CONSOLE" : "STUDENT PORTAL"}
+              </span>
               <button
                 type="button"
-                className={!admin ? "on" : ""}
-                onClick={() => switchPersona("student")}
+                className="switch-portal-nav"
+                onClick={() => switchPortalWithAuth(admin ? "student" : "admin")}
+                title={`Sign out and log in to ${admin ? "Student Portal" : "Admin Portal"}`}
               >
-                Student
-              </button>
-              <button
-                type="button"
-                className={admin ? "on" : ""}
-                onClick={() => switchPersona("admin")}
-              >
-                Admin
+                {admin ? <GraduationCap size={13} /> : <ShieldCheck size={13} />}
+                <span>Switch to {admin ? "Student Portal" : "Admin Portal"} ↗</span>
               </button>
             </div>
             {members.length > 1 ? (
@@ -1075,9 +1189,7 @@ export function CampusApp() {
           <footer className="page-footer">
             <span>CampusOS AI · Your campus, thoughtfully connected.</span>
             <span>
-              {profile.demo
-                ? "Synthetic institution · Demo Data"
-                : "Institution workspace"}{" "}
+              Institution workspace{" "}
               · {profile.timezone}
             </span>
           </footer>
@@ -1166,6 +1278,97 @@ export function QuickActions({ ask }: { ask: (q: string) => void }) {
         </button>
       ))}
     </div>
+  );
+}
+
+function HomeSearchBox({
+  question,
+  setQuestion,
+  ask,
+}: {
+  question: string;
+  setQuestion: (q: string) => void;
+  ask: (q: string) => void;
+}) {
+  const { isListening, isTranscribing, toggleListening, error } = useVoiceInput({
+    onTranscript: (spoken) => setQuestion(spoken),
+  });
+
+  return (
+    <>
+      <form
+        className="inp"
+        style={{ padding: 0, border: 0 }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (question.trim()) ask(question.trim());
+        }}
+      >
+        <div className="home-search-wrapper">
+          <input
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder={
+              isTranscribing
+                ? "Transcribing voice with Whisper STT model..."
+                : isListening
+                ? "Listening... speak your question now"
+                : "Ask anything about your campus…"
+            }
+            autoComplete="off"
+            disabled={isTranscribing}
+            style={
+              isListening
+                ? {
+                    borderColor: "#ef4444",
+                    boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.25)",
+                  }
+                : undefined
+            }
+          />
+          <button
+            type="button"
+            className={`home-voice-btn ${isListening ? "listening" : ""} ${isTranscribing ? "transcribing" : ""}`}
+            onClick={toggleListening}
+            disabled={isTranscribing}
+            title={
+              isTranscribing
+                ? "Transcribing with Whisper STT model..."
+                : isListening
+                ? "Listening... click to stop (Whisper STT Model)"
+                : "Ask using voice (Whisper STT Model)"
+            }
+            aria-label={isListening ? "Stop voice input" : "Start voice input"}
+          >
+            {isTranscribing ? (
+              <LoaderCircle className="spin" size={17} />
+            ) : isListening ? (
+              <MicOff size={17} />
+            ) : (
+              <Mic size={17} />
+            )}
+          </button>
+        </div>
+        <button
+          className="btn"
+          type="submit"
+          disabled={isTranscribing || (!question.trim() && !isListening)}
+        >
+          Ask CampusOS ↗
+        </button>
+      </form>
+      {isListening && (
+        <div className="voice-active-banner">
+          <span className="dot" style={{ background: "#ef4444" }} />
+          <span>Listening... Speak your question now (Whisper STT large-v3-turbo active)</span>
+        </div>
+      )}
+      {error && (
+        <div className="status-warn" style={{ fontSize: 12, marginTop: 4 }}>
+          {error}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -1262,24 +1465,7 @@ function HomeView({
                 </div>
               </div>
             </div>
-            <form
-              className="inp"
-              style={{ padding: 0, border: 0 }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (question.trim()) ask(question.trim());
-              }}
-            >
-              <input
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask anything about your campus…"
-                autoComplete="off"
-              />
-              <button className="btn" type="submit">
-                Ask CampusOS ↗
-              </button>
-            </form>
+            <HomeSearchBox question={question} setQuestion={setQuestion} ask={ask} />
             <QuickActions ask={ask} />
           </div>
 
@@ -1409,24 +1595,7 @@ function HomeView({
                 </div>
               </div>
             </div>
-            <form
-              className="inp"
-              style={{ padding: 0, border: 0 }}
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (question.trim()) ask(question.trim());
-              }}
-            >
-              <input
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                placeholder="Ask anything about your campus…"
-                autoComplete="off"
-              />
-              <button className="btn" type="submit">
-                Ask CampusOS ↗
-              </button>
-            </form>
+            <HomeSearchBox question={question} setQuestion={setQuestion} ask={ask} />
             <QuickActions ask={ask} />
             <div className="mute" style={{ fontSize: 12 }}>
               Grounded in your institution’s data. Every answer comes with a source.

@@ -20,7 +20,7 @@ import { type DataRecord, prettyDate, text } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 export function DemoBadge() {
-  return <span className="demo-badge">Demo Data</span>;
+  return null;
 }
 export function Empty({
   message = "No records yet.",

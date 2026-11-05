@@ -1212,3 +1212,344 @@ body.admin .av {
     padding-top: calc(12px + env(safe-area-inset-top, 0px));
   }
 }
+
+
+/* ==========================================================================
+   PORTAL PARTITIONING & VOICE INPUT STYLING
+   ========================================================================== */
+
+.portal-selector-bar {
+  display: flex;
+  background: #e2e8f0;
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 22px;
+  gap: 4px;
+}
+
+.portal-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  border-radius: 9px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.portal-tab:hover {
+  color: #1e293b;
+}
+
+.portal-tab.active.student {
+  background: #fff;
+  color: #4338ca;
+  box-shadow: 0 2px 8px rgba(67, 56, 202, 0.15);
+}
+
+.portal-tab.active.admin {
+  background: #0f172a;
+  color: #34d399;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+}
+
+.student-lp {
+  background: linear-gradient(145deg, #111a3b 0%, #1e1b4b 100%) !important;
+}
+
+.admin-lp {
+  background: linear-gradient(145deg, #091322 0%, #064e3b 100%) !important;
+}
+
+.admin-logo {
+  background: linear-gradient(135deg, #059669, #10b981) !important;
+}
+
+.demo-account-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px dashed #cbd5e1;
+  background: #f8fafc;
+  font-size: 12px;
+  color: #475569;
+  cursor: pointer;
+  margin-top: 10px;
+  margin-bottom: 16px;
+  text-align: left;
+  transition: all 0.15s ease;
+}
+
+.demo-account-pill:hover {
+  background: #f1f5f9;
+}
+
+.demo-account-pill.demo-student:hover {
+  border-color: #818cf8;
+  color: #3730a3;
+  background: #eef2ff;
+}
+
+.demo-account-pill.demo-admin:hover {
+  border-color: #34d399;
+  color: #065f46;
+  background: #ecfdf5;
+}
+
+.portal-header-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.switch-portal-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  color: #475569;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.switch-portal-nav:hover {
+  background: #fff;
+  border-color: #c7d2fe;
+  color: #1e293b;
+  transform: translateY(-1px);
+}
+
+.home-search-wrapper {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+
+.home-search-wrapper input {
+  width: 100%;
+  padding-right: 44px !important;
+}
+
+.home-voice-btn {
+  position: absolute;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 0;
+  background: transparent;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 2;
+}
+
+.home-voice-btn:hover {
+  background: #f1f5f9;
+  color: #4338ca;
+}
+
+.home-voice-btn.listening {
+  background: #fee2e2;
+  color: #ef4444;
+  animation: pulseRed 1.5s infinite;
+}
+
+.home-voice-btn.transcribing {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
+.voice-active-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #fee2e2;
+  border: 1px solid #fca5a5;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #b91c1c;
+  margin-top: 8px;
+  font-weight: 500;
+}
+
+@keyframes pulseRed {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+
+/* ==========================================================================
+   MARKDOWN CONTENT STYLING (FOR CHAT RESPONSES)
+   ========================================================================== */
+
+.markdown-content {
+  font-size: 14.5px;
+  line-height: 1.7;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+.markdown-content .chat-p {
+  margin: 0 0 10px 0;
+  line-height: 1.7;
+}
+
+.markdown-content .chat-p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content .chat-category-lead {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  padding-left: 2px;
+}
+
+.markdown-content .chat-bold {
+  font-weight: 700;
+  color: #1e1b4b;
+}
+
+.markdown-content .chat-italic {
+  font-style: italic;
+  color: #475569;
+}
+
+.markdown-content .chat-ul {
+  list-style-type: disc;
+  padding-left: 20px;
+  margin: 8px 0 12px;
+}
+
+.markdown-content .chat-ol {
+  list-style-type: decimal;
+  padding-left: 22px;
+  margin: 8px 0 12px;
+}
+
+.markdown-content .chat-li {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+.markdown-content .chat-h2,
+.markdown-content .chat-h3,
+.markdown-content .chat-h4 {
+  font-weight: 800;
+  color: #0f172a;
+  margin: 16px 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.markdown-content .chat-h2 {
+  font-size: 18px;
+}
+
+.markdown-content .chat-h3 {
+  font-size: 16px;
+}
+
+.markdown-content .chat-h4 {
+  font-size: 14.5px;
+}
+
+.markdown-content .chat-inline-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #4338ca;
+}
+
+.markdown-content .chat-code-wrapper {
+  margin: 12px 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #0f172a;
+}
+
+.markdown-content .chat-code-lang {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #94a3b8;
+  padding: 6px 12px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+}
+
+.markdown-content .chat-code-block {
+  padding: 12px 14px;
+  color: #f8fafc;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-x: auto;
+  margin: 0;
+}
+
+.markdown-content .chat-quote {
+  border-left: 3px solid #818cf8;
+  padding: 6px 14px;
+  margin: 10px 0;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 0 8px 8px 0;
+  color: #334155;
+  font-style: italic;
+}
+
+.markdown-content .chat-citation-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
+  margin: 0 3px;
+  vertical-align: baseline;
+}
+
+.markdown-content .chat-link {
+  color: #4f46e5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+.markdown-content .chat-link:hover {
+  color: #3730a3;
+}

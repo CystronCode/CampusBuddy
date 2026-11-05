@@ -11,8 +11,10 @@ import {
   MicOff,
 } from "lucide-react";
 import { api, streamChat, type Answer } from "@/lib/api";
+import { useVoiceInput } from "@/lib/use-voice-input";
 import { Button } from "@/components/ui/button";
 import { RecordList } from "@/components/result-cards";
+import { MarkdownView } from "@/components/markdown-view";
 import {
   type Workspace,
   useRemote,
@@ -41,66 +43,16 @@ export function ChatView({
   const [partial, setPartial] = useState("");
   const [error, setError] = useState("");
   const [historyRevision, setHistoryRevision] = useState(0);
-  const [isListening, setIsListening] = useState(false);
-  const [sttSupported, setSttSupported] = useState(false);
-  const recognitionRef = useRef<any>(null);
   const lock = useRef(false);
   const abort = useRef<AbortController | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const handled = useRef("");
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
-      if (SpeechRecognition) {
-        setSttSupported(true);
-        const recog = new SpeechRecognition();
-        recog.continuous = false;
-        recog.interimResults = true;
-        recog.lang = "en-IN";
-
-        recog.onresult = (event: any) => {
-          let transcript = "";
-          for (let i = event.resultIndex; i < event.results.length; ++i) {
-            transcript += event.results[i][0].transcript;
-          }
-          setInput(transcript);
-        };
-
-        recog.onerror = (e: any) => {
-          console.warn("Speech recognition error:", e);
-          setIsListening(false);
-        };
-
-        recog.onend = () => {
-          setIsListening(false);
-        };
-
-        recognitionRef.current = recog;
-      }
-    }
-  }, []);
-
-  function toggleVoiceInput() {
-    if (!recognitionRef.current) {
-      setError("Speech-to-text is not supported in this browser. Please use Chrome, Edge, or Safari.");
-      return;
-    }
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-    } else {
-      setError("");
-      try {
-        recognitionRef.current.start();
-        setIsListening(true);
-      } catch (err) {
-        console.warn("Could not start recognition:", err);
-      }
-    }
-  }
+  const { isListening, isTranscribing, toggleListening, error: voiceError } =
+    useVoiceInput({
+      onTranscript: (spoken) => setInput(spoken),
+      onError: (err) => setError(err),
+    });
   const history = useRemote<{ id: string; title: string }[]>(
     "/v1/conversations",
     { ...w, revision: w.revision + historyRevision },
@@ -264,7 +216,7 @@ export function ChatView({
                 </span>
                 CampusOS
               </div>
-              <p className="chat-answer">{turn.answer?.answer}</p>
+              <MarkdownView content={turn.answer?.answer || ""} />
               {turn.answer && turn.answer.records.length > 0 && (
                 <RecordList
                   records={turn.answer.records}
@@ -278,7 +230,7 @@ export function ChatView({
                   <button
                     key={ix}
                     onClick={() => w.download(s.id)}
-                    title={`${s.demo ? "Demo Data · " : ""}Imported ${new Date(s.created_at).toLocaleDateString("en-IN")}`}
+                    title={`Imported ${new Date(s.created_at).toLocaleDateString("en-IN")}`}
                   >
                     <FileText size={12} />
                     {ix + 1}. {s.filename}
@@ -308,7 +260,7 @@ export function ChatView({
               <LoaderCircle className="spin" size={17} />
               Finding your answer…
             </div>
-            {partial && <p className="chat-answer">{partial}</p>}
+            {partial && <MarkdownView content={partial} />}
           </div>
         )}
       </div>
@@ -326,31 +278,41 @@ export function ChatView({
           </label>
           <input
             id="chat-question"
-            placeholder={isListening ? "Listening... speak now" : "Ask anything about your campus..."}
+            placeholder={isTranscribing ? "Transcribing with Whisper STT model..." : isListening ? "Listening... speak now" : "Ask anything about your campus..."}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             maxLength={2000}
             disabled={busy}
             style={isListening ? { borderColor: "#ef4444", boxShadow: "0 0 0 2px rgba(239, 68, 68, 0.2)" } : undefined}
           />
-          {sttSupported && (
-            <Button
-              type="button"
-              variant={isListening ? "default" : "outline"}
-              onClick={toggleVoiceInput}
-              disabled={busy}
-              aria-label={isListening ? "Stop listening" : "Voice input (Speech to Text)"}
-              title={isListening ? "Listening... click to stop" : "Click to speak"}
-              style={{
-                borderRadius: 8,
-                padding: "0 12px",
-                background: isListening ? "#ef4444" : undefined,
-                color: isListening ? "#ffffff" : undefined,
-              }}
-            >
-              {isListening ? <MicOff size={18} /> : <Mic size={18} />}
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant={isListening ? "default" : "outline"}
+            onClick={toggleListening}
+            disabled={busy || isTranscribing}
+            aria-label={isListening ? "Stop listening" : "Voice input (Whisper STT Model)"}
+            title={
+              isTranscribing
+                ? "Transcribing with Whisper STT model..."
+                : isListening
+                ? "Listening... click to stop"
+                : "Ask using voice (Whisper STT Model)"
+            }
+            style={{
+              borderRadius: 8,
+              padding: "0 12px",
+              background: isListening ? "#ef4444" : isTranscribing ? "#4338ca" : undefined,
+              color: isListening || isTranscribing ? "#ffffff" : undefined,
+            }}
+          >
+            {isTranscribing ? (
+              <LoaderCircle className="spin" size={18} />
+            ) : isListening ? (
+              <MicOff size={18} />
+            ) : (
+              <Mic size={18} />
+            )}
+          </Button>
           <Button
             type="submit"
             disabled={busy || !input.trim()}

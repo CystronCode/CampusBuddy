@@ -197,3 +197,31 @@ export function prettyDate(value: unknown) {
 export function text(value: unknown) {
   return value === null || value === undefined ? "" : String(value);
 }
+
+export interface STTResult {
+  text: string;
+  model: string;
+  latency_ms: number;
+}
+
+export async function transcribeAudio(audioBlob: Blob): Promise<STTResult> {
+  const formData = new FormData();
+  let ext = "webm";
+  if (audioBlob.type.includes("wav")) ext = "wav";
+  else if (audioBlob.type.includes("mp4")) ext = "mp4";
+  else if (audioBlob.type.includes("ogg")) ext = "ogg";
+
+  formData.append("file", audioBlob, `speech.${ext}`);
+
+  const res = await fetch(`${API}/v1/audio/transcribe`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Audio transcription failed." }));
+    throw new Error(err.detail || "Audio transcription failed.");
+  }
+
+  return (await res.json()) as STTResult;
+}

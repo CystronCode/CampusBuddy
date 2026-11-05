@@ -415,7 +415,7 @@ export function AdminView({
                           checked={demo}
                           onChange={(e) => setDemo(e.target.checked)}
                         />
-                        This file contains synthetic Demo Data
+                        Mark as sample data
                       </label>
                     </div>
                     {kind === "document" && (

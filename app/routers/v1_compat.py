@@ -11,6 +11,7 @@ import uuid
 import asyncio
 import hashlib
 import logging
+import httpx
 from datetime import datetime, date, timedelta, timezone
 from zoneinfo import ZoneInfo
 from typing import Optional, Dict, Any, List
@@ -119,6 +120,7 @@ def _require_admin(request: Request) -> Dict[str, Any]:
 class V1LoginInput(BaseModel):
     email: str
     password: str
+    portal: Optional[str] = None  # "student" or "admin" 
 
 
 @router.post("/auth/login")
@@ -155,6 +157,18 @@ async def v1_auth_login(body: V1LoginInput):
         else:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid institutional email or password.")
 
+    # Enforce separate partition access by portal if specified
+    if body.portal == "admin" and role != "institution_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access Denied: This account does not possess administrative privileges. Please log in using the Student Portal."
+        )
+    if body.portal == "student" and role == "institution_admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrative Account Detected: Please switch to the Administrative Portal to sign in."
+        )
+
     # Create signed JWT token valid for 14 days
     payload = {
         "sub": user_id,
@@ -188,6 +202,107 @@ async def v1_auth_login(body: V1LoginInput):
     }
 
     return {"session": session_obj, "user": user_obj}
+
+
+@router.post("/audio/transcribe")
+@router.post("/stt")
+async def v1_transcribe_audio(
+    request: Request,
+    file: Optional[UploadFile] = File(None),
+):
+    """
+    High-speed Speech-To-Text (STT) inference endpoint.
+    Transcribes audio using Groq Whisper Large V3 Turbo model (<200ms latency).
+    Supports multipart audio files (webm/wav/mp3/ogg/m4a) and base64 JSON payloads.
+    """
+    audio_bytes = b""
+    filename = "speech.webm"
+    content_type = "audio/webm"
+
+    content_type_hdr = request.headers.get("content-type", "").lower()
+
+    if "application/json" in content_type_hdr:
+        try:
+            body = await request.json()
+            b64_data = body.get("audio_base64") or body.get("audio") or ""
+            if "," in b64_data:
+                parts = b64_data.split(",", 1)
+                b64_data = parts[1]
+            if b64_data:
+                import base64
+                audio_bytes = base64.b64decode(b64_data)
+                fmt = body.get("format", "webm").lower().replace(".", "")
+                filename = f"speech.{fmt}"
+                content_type = f"audio/{fmt}"
+        except Exception as e:
+            logger.warning(f"Failed to parse base64 audio payload: {e}")
+    elif file is not None:
+        audio_bytes = await file.read()
+        filename = file.filename or "speech.webm"
+        content_type = file.content_type or "audio/webm"
+    else:
+        try:
+            form = await request.form()
+            form_file = form.get("file")
+            if form_file and hasattr(form_file, "read"):
+                audio_bytes = await form_file.read()
+                filename = getattr(form_file, "filename", "speech.webm")
+                content_type = getattr(form_file, "content_type", "audio/webm")
+        except Exception:
+            pass
+
+    if not audio_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No audio recording received. Please record your voice before submitting."
+        )
+
+    groq_key = settings.GROQ_API_KEY
+    if not groq_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="STT service (Groq Whisper) is not configured on this server."
+        )
+
+    t0 = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            files_payload = {
+                "file": (filename, audio_bytes, content_type)
+            }
+            data_payload = {
+                "model": "whisper-large-v3-turbo",
+                "temperature": "0.0",
+                "response_format": "json"
+            }
+            res = await client.post(
+                "https://api.groq.com/openai/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {groq_key}"},
+                files=files_payload,
+                data=data_payload,
+            )
+            if res.status_code == 200:
+                result = res.json()
+                transcribed = result.get("text", "").strip()
+                latency_ms = int((time.time() - t0) * 1000)
+                logger.info(f"[STT] Transcribed audio in {latency_ms}ms using whisper-large-v3-turbo: {transcribed[:60]}")
+                return {
+                    "text": transcribed,
+                    "model": "whisper-large-v3-turbo",
+                    "latency_ms": latency_ms
+                }
+            else:
+                logger.error(f"[STT] Groq Whisper error {res.status_code}: {res.text}")
+                raise HTTPException(
+                    status_code=status.HTTP_502_BAD_GATEWAY,
+                    detail=f"Speech transcription failed ({res.status_code}): {res.text}"
+                )
+    except httpx.RequestError as exc:
+        logger.error(f"[STT] Connection error to Groq Whisper: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Speech recognition service unreachable: {str(exc)}"
+        )
 
 
 # Standard RVCE 3rd Sem CSE / AIML Timetable Course & Faculty Legend Fallback

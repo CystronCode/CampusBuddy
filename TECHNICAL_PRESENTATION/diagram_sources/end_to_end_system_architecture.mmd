@@ -1,0 +1,205 @@
+flowchart TD
+    %% ========================================================
+    %% 1. CLIENT TIER (NEXT.JS 16 REACT APPLICATION)
+    %% ========================================================
+    subgraph T1 ["1. CLIENT TIER · NEXT.JS 16 REACT SPA (PORT 3000)"]
+        U_Student["Alex Student Persona
+(alex student · CSE-3-A / Non-Admin)"]
+        U_Admin["Campus Admin Persona
+(campus admin · Full Ingestion Privileges)"]
+        
+        AppShell["Next.js App Shell & Tab Navigation (campus-app.tsx)"]
+        
+        V_Chat["Ask CampusOS Workspace
+(chat-view.tsx)"]
+        V_Browse["Directory Browser
+(browse-view.tsx)"]
+        V_Settings["User Settings
+(settings-view.tsx)"]
+        V_Admin["Admin Ingestion Console
+(admin-view.tsx)"]
+        
+        LocalStore[("Browser localStorage
+campusos_session (JWT) · campusos-tenant")]
+        APIClient["Typed API Client (lib/api.ts)
+Bearer Auth Token + X-Tenant-ID Header"]
+    end
+
+    %% ========================================================
+    %% 2. BACKEND API GATEWAY & ROUTING
+    %% ========================================================
+    subgraph T2 ["2. BACKEND API GATEWAY & INGRESS LAYER · FASTAPI / ONRENDER (PORT 8000)"]
+        CORS["CORSMiddleware (Origin Regex Validation)"]
+        SecMid["SessionSecurityMiddleware (/api/* Checked · /v1/* Bypassed)"]
+        
+        HealthEP["GET /health & /metrics
+(Keep-Alive Ping)"]
+        EP_Auth["POST /v1/auth/login · GET /v1/me
+Demo Token Issuance (14-Day JWT)"]
+        EP_Overview["GET /v1/overview
+Next Class & Notices"]
+        EP_Browse["GET /v1/{timetable, menu, faculty, events}
+Directory Queries"]
+        EP_Chat["POST /v1/chat & /v1/chat/stream
+SSE Token Feed"]
+        EP_Ingest["POST /v1/ingestion/{preview, records, retry, confirm}
+Upload Pipeline"]
+        EP_CRUD["PATCH /v1/timetable · POST /v1/menu
+Direct Inline CRUD"]
+    end
+
+    %% ========================================================
+    %% 3. CORE PROCESSING ENGINES
+    %% ========================================================
+    subgraph T3 ["3. CORE PROCESSING & INTELLIGENCE ENGINES (app/services)"]
+        TimeEngine["Time Engine (time_engine.py)
+Asia/Kolkata Next Class Countdown"]
+        Tier0["Tier 0 Engine (tier0_engine.py)
+Deterministic Regex Fast-Path (< 5ms)"]
+        Tier1["Tier 1 Intent Router (router_engine.py)
+Semantic Intent Categorizer & Entity Extractor"]
+        ToolExec["Tool Executor (tool_executor.py)
+Dispatches DB Queries or Hybrid Search"]
+        Tier2["Tier 2 Hybrid RAG Engine (rag_engine.py)
+Reciprocal Rank Fusion: pgvector + tsvector"]
+        LLMCascade["Cascading LLM Synthesizer (llm_provider.py)
+Primary: Groq LPU | Fallback: Gemini Flash"]
+
+        VersionCache["Versioned Raw Row Cache (cache_service.py)
+Keyed strictly by (scope, active_version, rev)"]
+        VolatileState["In-Memory State Dictionaries
+_conversations, _messages, _user_prefs"]
+
+        MimeSniff["Upload Handler (uploads.py)
+Magic Bytes MIME Sniffer & 10MB Cap"]
+        BGTasks["FastAPI BackgroundTasks Queue
+Asynchronous Processing Queue"]
+        OCRVision["Document Extractor (ingestion_service.py)
+Gemini 3 Flash Vision OCR + Groq Fallback"]
+        DataValid["Data Validators (validators.py)
+Time Sequence, Day Enum & Range Checks"]
+        ApproveEngine["Approval Service (approval.py)
+approve_submission() -> v+1 Commit"]
+        ChunkEmbed["Embedding Service (embedding_service.py)
+Heading-Aware Chunker + 768-d Vector Embedder"]
+    end
+
+    %% ========================================================
+    %% 4. EXTERNAL CLOUD AI
+    %% ========================================================
+    subgraph T4 ["4. EXTERNAL CLOUD AI & MODEL PROVIDERS"]
+        GroqCloud["Groq Cloud LPU Service
+Model: qwen/qwen3.8-27b
+Sub-200ms Intent Routing & Synthesis"]
+        GeminiAPI["Google Gemini Cloud API
+Models: gemini-3-flash & gemini-embedding-001
+Multimodal Vision OCR & 768-d Embeddings"]
+    end
+
+    %% ========================================================
+    %% 5. PERSISTENCE & STORAGE TIER
+    %% ========================================================
+    subgraph T5 ["5. PERSISTENCE & STORAGE TIER (SUPABASE POSTGRESQL 16)"]
+        ReadPool["app_read Pool
+psycopg3 Async Pool (max_size=5, Read-Only)"]
+        WritePool["app_write Pool
+psycopg3 Async Pool (max_size=5, DML / Transactions)"]
+        LocalDisk["Render Ephemeral Container Disk
+./uploads/ Directory (Raw Upload File Staging)"]
+
+        T_tt["timetable_slots (day, times, subject, room, version)"]
+        T_menu["menu_items (meal, item, price, is_veg, version)"]
+        T_fac["faculty (name, designation, cabin, subjects, email)"]
+        T_hol["holidays (date, name, kind, version)"]
+        T_evt["events (title, venue, starts_at, valid_until)"]
+
+        T_chunks["doc_chunks (content, vector 768-d, tsv tsvector, scope)"]
+        T_logs["query_logs (tier, intent, latency_ms, tokens, feedback)"]
+
+        T_ver["data_versions (scope PK, active_version, rev)"]
+        T_sub["submissions (status: processing/approved, payload)"]
+        T_files["files (storage_path, sha256, mime, size)"]
+        T_audit["audit_log (actor, action, target, timestamp)"]
+        T_auth["users & auth_otps (roles, branch, tokens)"]
+    end
+
+    %% ========================================================
+    %% CLEAN ORCHESTRATION EDGES
+    %% ========================================================
+    U_Student --> AppShell
+    U_Admin --> AppShell
+    AppShell --> V_Chat
+    AppShell --> V_Browse
+    AppShell --> V_Settings
+    AppShell --> V_Admin
+    
+    V_Chat --> LocalStore
+    V_Browse --> LocalStore
+    V_Settings --> LocalStore
+    V_Admin --> LocalStore
+    LocalStore --> APIClient
+
+    APIClient -- "HTTPS / JSON Payload (Bearer JWT)" --> CORS
+    CORS --> SecMid
+    SecMid --> HealthEP
+    SecMid --> EP_Auth
+    SecMid --> EP_Overview
+    SecMid --> EP_Browse
+    SecMid --> EP_Chat
+    SecMid --> EP_Ingest
+    SecMid --> EP_CRUD
+
+    %% T2 -> T3 (Read Flow)
+    EP_Overview --> TimeEngine
+    EP_Overview --> VersionCache
+    EP_Browse --> ToolExec
+    EP_Chat --> Tier0
+    Tier0 -- "Regex Match" --> ToolExec
+    Tier0 -- "Regex Miss" --> Tier1
+    Tier1 --> ToolExec
+    ToolExec --> Tier2
+    ToolExec --> VersionCache
+    ToolExec --> LLMCascade
+    EP_Chat --> VolatileState
+
+    %% T2 -> T3 (Write Flow)
+    EP_Ingest --> MimeSniff
+    MimeSniff --> LocalDisk
+    MimeSniff --> BGTasks
+    BGTasks --> OCRVision
+    OCRVision --> DataValid
+    DataValid --> WritePool
+    EP_Ingest -- "Admin Confirm" --> ApproveEngine
+    ApproveEngine --> ChunkEmbed
+    ApproveEngine --> WritePool
+    ApproveEngine -- "Evict Cache" --> VersionCache
+    EP_CRUD --> WritePool
+
+    %% T3 -> T4 (External Cloud AI)
+    Tier1 --> GroqCloud
+    LLMCascade --> GroqCloud
+    LLMCascade --> GeminiAPI
+    OCRVision --> GeminiAPI
+    ChunkEmbed --> GeminiAPI
+    Tier2 --> GeminiAPI
+
+    %% T3 & Pools -> T5 (Database)
+    VersionCache --> ReadPool
+    Tier2 --> ReadPool
+    ToolExec --> ReadPool
+    ReadPool --> T_tt
+    ReadPool --> T_menu
+    ReadPool --> T_fac
+    ReadPool --> T_hol
+    ReadPool --> T_evt
+    ReadPool --> T_chunks
+    ReadPool --> T_logs
+
+    WritePool --> T_ver
+    WritePool --> T_sub
+    WritePool --> T_files
+    WritePool --> T_audit
+    WritePool --> T_auth
+    WritePool --> T_tt
+    WritePool --> T_menu
+    WritePool --> T_chunks
